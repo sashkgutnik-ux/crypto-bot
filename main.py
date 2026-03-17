@@ -84,7 +84,7 @@ def run_bot():
 
         # статус (без аргументов!)
         try:
-            trader.status()
+            trader.status(price)
         except Exception as e:
             print(f"Status error: {e}")
 
