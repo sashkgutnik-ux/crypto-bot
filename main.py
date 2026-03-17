@@ -4,7 +4,7 @@ import requests
 from ai_strategy_selector import choose_best_strategy
 from paper_trader import PaperTrader
 
-from trading_strategies import ...
+import trading_strategies
     ema_strategy,
     rsi_strategy,
     breakout_strategy,
