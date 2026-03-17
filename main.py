@@ -1,30 +1,44 @@
-import time
+mport time
+import requests
 from binance_client import BinanceClient
 from indicators import calculate_ema, calculate_rsi
 from price_history import get_historical_prices
 
-SYMBOL = "BTCUSDT"
-SLEEP = 10
+# ===== SETTINGS =====
+SYMBOL = "BTCUSDC"
+SLEEP = 15
 
-LEVERAGE = 2
-RISK = 0.1        # 10% от баланса
-STOP_LOSS = 0.01  # 1%
-TAKE_PROFIT = 0.02 # 2%
+RISK = 0.15
+STOP_LOSS = 0.01
+TAKE_PROFIT = 0.02
+TRAILING_STOP = 0.008
+
+# Telegram
+TELEGRAM_TOKEN = "8691332194:AAEFEy49VmViDx9PQ3mTPYPF4hTZLGX3CI0"
+CHAT_ID = "8039241406"
 
 in_position = False
 entry_price = 0
-side = None
+highest_price = 0
+last_trade_time = 0
 
 
+# ===== TELEGRAM =====
+def send_telegram(msg):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
+
+
+# ===== POSITION SIZE =====
 def position_size(balance, price):
-    return round((balance * RISK * LEVERAGE) / price, 3)
+    return round((balance * RISK) / price, 6)
 
 
+# ===== MAIN =====
 def run():
-    global in_position, entry_price, side
+    global in_position, entry_price, highest_price, last_trade_time
 
     client = BinanceClient()
-    client.set_leverage(SYMBOL, LEVERAGE)
 
     while True:
         try:
@@ -40,61 +54,83 @@ def run():
 
             signal = "HOLD"
 
-            # 🔥 ЛОНГ
-            if ema50 > ema200 and rsi < 45:
-                signal = "LONG"
+            # 🔥 УМНАЯ СТРАТЕГИЯ
+            trend_up = ema50 > ema200
+            trend_down = ema50 < ema200
 
-            # 🔥 ШОРТ
-            elif ema50 < ema200 and rsi > 55:
-                signal = "SHORT"
+            # фильтр флета
+            trend_strength = abs(ema50 - ema200) / price
+
+            if trend_up and rsi < 48 and trend_strength > 0.001:
+                signal = "BUY"
+
+            elif trend_down and rsi > 52 and trend_strength > 0.001:
+                signal = "SELL"
 
             print("Signal:", signal)
 
-            balance = client.get_balance()
-            print("USDT Futures:", balance)
+            usdc = client.get_balance("USDC")
+            btc = client.get_balance("BTC")
 
-            qty = position_size(balance, price)
+            print("USDC:", usdc, "BTC:", btc)
 
-            # ===== ENTRY =====
-            if not in_position and signal == "LONG":
-                print("🟢 OPEN LONG")
-                client.order(SYMBOL, "BUY", qty)
+            now = time.time()
+
+            # ===== BUY =====
+            if signal == "BUY" and not in_position and usdc > 5 and now - last_trade_time > 60:
+
+                qty = max(position_size(usdc, price), 0.00001)
+
+                print("🟢 BUY BTC")
+                client.buy(SYMBOL, qty)
+
+                send_telegram(f"🟢 BUY BTC\nPrice: {price}\nQty: {qty}")
 
                 entry_price = price
-                side = "BUY"
+                highest_price = price
                 in_position = True
+                last_trade_time = now
 
-            elif not in_position and signal == "SHORT":
-                print("🔴 OPEN SHORT")
-                client.order(SYMBOL, "SELL", qty)
+            # ===== SELL SIGNAL =====
+            elif signal == "SELL" and in_position and btc > 0.00001:
 
-                entry_price = price
-                side = "SELL"
-                in_position = True
+                print("🔴 SELL BTC")
+                client.sell(SYMBOL, btc)
 
-            # ===== EXIT =====
+                send_telegram(f"🔴 SELL BTC\nPrice: {price}")
+
+                in_position = False
+                last_trade_time = now
+
+            # ===== POSITION MGMT =====
             if in_position:
+                highest_price = max(highest_price, price)
 
                 # STOP LOSS
-                if side == "BUY" and price <= entry_price * (1 - STOP_LOSS):
-                    print("🛑 SL LONG")
-                    client.close_position(SYMBOL, side, qty)
-                    in_position = False
+                if price <= entry_price * (1 - STOP_LOSS):
+                    print("🛑 STOP LOSS")
+                    client.sell(SYMBOL, btc)
 
-                elif side == "SELL" and price >= entry_price * (1 + STOP_LOSS):
-                    print("🛑 SL SHORT")
-                    client.close_position(SYMBOL, side, qty)
+                    send_telegram(f"🛑 STOP LOSS\nPrice: {price}")
+
                     in_position = False
 
                 # TAKE PROFIT
-                elif side == "BUY" and price >= entry_price * (1 + TAKE_PROFIT):
-                    print("💰 TP LONG")
-                    client.close_position(SYMBOL, side, qty)
+                elif price >= entry_price * (1 + TAKE_PROFIT):
+                    print("💰 TAKE PROFIT")
+                    client.sell(SYMBOL, btc)
+
+                    send_telegram(f"💰 TAKE PROFIT\nPrice: {price}")
+
                     in_position = False
 
-                elif side == "SELL" and price <= entry_price * (1 - TAKE_PROFIT):
-                    print("💰 TP SHORT")
-                    client.close_position(SYMBOL, side, qty)
+                # TRAILING
+                elif price <= highest_price * (1 - TRAILING_STOP):
+                    print("📉 TRAILING STOP")
+                    client.sell(SYMBOL, btc)
+
+                    send_telegram(f"📉 TRAILING STOP\nPrice: {price}")
+
                     in_position = False
 
             time.sleep(SLEEP)
@@ -105,5 +141,6 @@ def run():
 
 
 if __name__ == "__main__":
-    print("🚀 FUTURES BOT STARTED")
+    print("🚀 BOT WITH TELEGRAM STARTED")
+    send_telegram("🤖 Bot started")
     run()
