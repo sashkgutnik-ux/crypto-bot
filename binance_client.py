@@ -46,14 +46,17 @@ class BinanceClient:
         return data
 
     # ===== BALANCE =====
-    def get_balance(self):
-        data = self._request("GET", "/fapi/v2/account")
+    def get_balance(self, asset):
+    data = self._request("GET", "/api/v3/account")
 
-        for asset in data["balances"]:
-            if asset["asset"] == "USDT":
-                return float(asset["availableBalance"])
-
+    if "balances" not in data:
         return 0
+
+    for b in data["balances"]:
+        if b["asset"] == asset:
+            return float(b["free"])
+
+    return 0
 
     # ===== SET LEVERAGE =====
     def set_leverage(self, symbol, leverage):
