@@ -1,8 +1,8 @@
 from binance.client import Client
 
 # 🔐 ВСТАВЬ СЮДА СВОИ КЛЮЧИ
-API_KEY = "YOUR_API_KEY"
-API_SECRET = "YOUR_API_SECRET"
+API_KEY = "eCWy1i5O1Lh1pcUQwHNVeXSTPF6iAvJAEzD0MCun050Sq6jZyWDlFbbQjPX2e73w"
+API_SECRET = "kkiygYBvpMADFOTNwbDFV3kv65HsvonOXqwRuSDZLf4GlHYwyaSQjh7zDBHRY4tZ"
 
 # подключение
 client = Client(API_KEY, API_SECRET)
