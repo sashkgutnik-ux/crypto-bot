@@ -1,65 +1,47 @@
-from binance.client import Client
-
-# 🔐 ВСТАВЬ СЮДА СВОИ КЛЮЧИ
-API_KEY = "eCWy1i5O1Lh1pcUQwHNVeXSTPF6iAvJAEzD0MCun050Sq6jZyWDlFbbQjPX2e73w"
-API_SECRET = "kkiygYBvpMADFOTNwbDFV3kv65HsvonOXqwRuSDZLf4GlHYwyaSQjh7zDBHRY4tZ"
-
-# подключение
-client = Client(API_KEY, API_SECRET)
-
-# ⚠️ ОБЯЗАТЕЛЬНО: testnet
-client.API_URL = "https://testnet.binance.vision/api"
+import requests
+import time
+import hmac
+import hashlib
 
 
-# ===== Получить цену =====
-def get_price(symbol="BTCUSDT"):
-    ticker = client.get_symbol_ticker(symbol=symbol)
-    return float(ticker["price"])
+class BinanceClient:
+    def __init__(self):
+        self.API_KEY = "YOUR_API_KEY"
+        self.API_SECRET = "YOUR_SECRET_KEY"
+        self.BASE_URL = "https://api.binance.com"
 
+    def _get_signature(self, query_string):
+        return hmac.new(
+            self.API_SECRET.encode(),
+            query_string.encode(),
+            hashlib.sha256
+        ).hexdigest()
 
-# ===== Баланс =====
-def get_balance(asset):
-    balance = client.get_asset_balance(asset=asset)
-    if balance:
-        return float(balance["free"])
-    return 0.0
+    def _headers(self):
+        return {
+            "X-MBX-APIKEY": self.API_KEY
+        }
 
+    def get_balance(self, asset):
+        url = "/api/v3/account"
 
-# ===== Купить =====
-def market_buy(symbol, usdt_amount):
-    price = get_price(symbol)
-    quantity = round(usdt_amount / price, 6)
+        timestamp = int(time.time() * 1000)
+        query_string = f"timestamp={timestamp}"
+        signature = self._get_signature(query_string)
 
-    order = client.order_market_buy(
-        symbol=symbol,
-        quantity=quantity
-    )
+        full_url = self.BASE_URL + url + "?" + query_string + "&signature=" + signature
 
-    print(f"✅ BUY {quantity} BTC")
-    return order
+        response = requests.get(full_url, headers=self._headers())
+        data = response.json()
 
+        for bal in data["balances"]:
+            if bal["asset"] == asset:
+                return float(bal["free"])
 
-# ===== Продать =====
-def market_sell(symbol, quantity):
-    order = client.order_market_sell(
-        symbol=symbol,
-        quantity=round(quantity, 6)
-    )
+        return 0.0
 
-    print(f"✅ SELL {quantity} BTC")
-    return order
+    def market_buy(self, symbol, quantity):
+        print(f"🚀 MARKET BUY {quantity} {symbol}")
 
-
-# ===== Портфель =====
-def print_balance():
-    usdt = get_balance("USDT")
-    btc = get_balance("BTC")
-
-    price = get_price()
-
-    total = usdt + btc * price
-
-    print("\n===== BINANCE BALANCE =====")
-    print(f"USDT: {usdt}")
-    print(f"BTC: {btc}")
-    print(f"TOTAL: {round(total, 2)}")
+    def market_sell(self, symbol, quantity):
+        print(f"🚀 MARKET SELL {quantity} {symbol}")
