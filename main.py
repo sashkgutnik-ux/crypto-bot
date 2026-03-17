@@ -3,28 +3,28 @@ from binance_client import BinanceClient
 from indicators import calculate_ema, calculate_rsi
 from price_history import get_historical_prices
 
-# ===== SETTINGS =====
-SYMBOL = "BTCUSDC"
-SLEEP = 15
+SYMBOL = "BTCUSDT"
+SLEEP = 10
 
-RISK = 0.2          # 20% от баланса в сделку (для маленького депозита)
-STOP_LOSS = 0.01    # 1%
-TAKE_PROFIT = 0.015 # 1.5%
+LEVERAGE = 2
+RISK = 0.1        # 10% от баланса
+STOP_LOSS = 0.01  # 1%
+TAKE_PROFIT = 0.02 # 2%
 
 in_position = False
 entry_price = 0
+side = None
 
 
-# ===== POSITION SIZE =====
 def position_size(balance, price):
-    return round((balance * RISK) / price, 6)
+    return round((balance * RISK * LEVERAGE) / price, 3)
 
 
-# ===== MAIN LOOP =====
 def run():
-    global in_position, entry_price
+    global in_position, entry_price, side
 
     client = BinanceClient()
+    client.set_leverage(SYMBOL, LEVERAGE)
 
     while True:
         try:
@@ -35,73 +35,75 @@ def run():
             ema200 = calculate_ema(prices, 200)
             rsi = calculate_rsi(prices)
 
-            print("\n===== MARKET =====")
-            print("PRICE:", price)
+            print("\nPRICE:", price)
+            print("EMA50:", ema50, "EMA200:", ema200, "RSI:", rsi)
 
-            print("\n===== INDICATORS =====")
-            print("EMA50:", ema50)
-            print("EMA200:", ema200)
-            print("RSI:", rsi)
-
-            # ===== SIGNAL =====
             signal = "HOLD"
 
-            # 🔥 улучшенные входы (чаще сделки)
+            # 🔥 ЛОНГ
             if ema50 > ema200 and rsi < 45:
-                signal = "BUY"
+                signal = "LONG"
+
+            # 🔥 ШОРТ
             elif ema50 < ema200 and rsi > 55:
-                signal = "SELL"
+                signal = "SHORT"
 
-            print("\nSignal:", signal)
+            print("Signal:", signal)
 
-            # ===== BALANCE =====
-            usdc = client.get_balance("USDC")
-            btc = client.get_balance("BTC")
+            balance = client.get_balance()
+            print("USDT Futures:", balance)
 
-            print("\n===== BALANCE =====")
-            print("USDC:", usdc)
-            print("BTC:", btc)
+            qty = position_size(balance, price)
 
-            # ===== BUY =====
-            if signal == "BUY" and not in_position and usdc > 5:
-                qty = max(position_size(usdc, price), 0.00001)
-
-                print("\n🟢 BUY BTC:", qty)
-                client.buy(SYMBOL, qty)
+            # ===== ENTRY =====
+            if not in_position and signal == "LONG":
+                print("🟢 OPEN LONG")
+                client.order(SYMBOL, "BUY", qty)
 
                 entry_price = price
+                side = "BUY"
                 in_position = True
 
-            # ===== SELL (signal) =====
-            elif signal == "SELL" and in_position and btc > 0.00001:
-                print("\n🔴 SELL BTC (signal)")
-                client.sell(SYMBOL, btc)
+            elif not in_position and signal == "SHORT":
+                print("🔴 OPEN SHORT")
+                client.order(SYMBOL, "SELL", qty)
 
-                in_position = False
+                entry_price = price
+                side = "SELL"
+                in_position = True
 
-            # ===== POSITION MANAGEMENT =====
+            # ===== EXIT =====
             if in_position:
 
-                # 🛑 STOP LOSS
-                if price <= entry_price * (1 - STOP_LOSS):
-                    print("\n🛑 STOP LOSS TRIGGERED")
-                    client.sell(SYMBOL, btc)
+                # STOP LOSS
+                if side == "BUY" and price <= entry_price * (1 - STOP_LOSS):
+                    print("🛑 SL LONG")
+                    client.close_position(SYMBOL, side, qty)
                     in_position = False
 
-                # 💰 TAKE PROFIT
-                elif price >= entry_price * (1 + TAKE_PROFIT):
-                    print("\n💰 TAKE PROFIT")
-                    client.sell(SYMBOL, btc)
+                elif side == "SELL" and price >= entry_price * (1 + STOP_LOSS):
+                    print("🛑 SL SHORT")
+                    client.close_position(SYMBOL, side, qty)
+                    in_position = False
+
+                # TAKE PROFIT
+                elif side == "BUY" and price >= entry_price * (1 + TAKE_PROFIT):
+                    print("💰 TP LONG")
+                    client.close_position(SYMBOL, side, qty)
+                    in_position = False
+
+                elif side == "SELL" and price <= entry_price * (1 - TAKE_PROFIT):
+                    print("💰 TP SHORT")
+                    client.close_position(SYMBOL, side, qty)
                     in_position = False
 
             time.sleep(SLEEP)
 
         except Exception as e:
-            print("\n❌ ERROR:", e)
+            print("ERROR:", e)
             time.sleep(SLEEP)
 
 
-# ===== START =====
 if __name__ == "__main__":
-    print("🚀 STARTING BOT (EMA + RSI + SL + TP)")
+    print("🚀 FUTURES BOT STARTED")
     run()
