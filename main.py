@@ -33,7 +33,7 @@ def run_bot():
         print(f"BTC price: {price}")
 
         # AI выбор стратегии
-        ai_result = choose_best_strategy(price)
+        ai_result = choose_best_strategy(price)[0]
 
         print("\n===== AI ANALYSIS =====")
         for k, v in ai_result.items():
