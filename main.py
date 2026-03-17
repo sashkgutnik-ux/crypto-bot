@@ -1,4 +1,4 @@
-mport time
+import time
 import requests
 from binance_client import BinanceClient
 from indicators import calculate_ema, calculate_rsi
