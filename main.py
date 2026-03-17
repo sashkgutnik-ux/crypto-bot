@@ -1,32 +1,13 @@
 import time
-import requests
 
 from ai_strategy_selector import choose_best_strategy
-from binance_client import market_buy, market_sell, print_balance, get_price
-from paper_trader import PaperTrader
 import trading_strategies
 
-
-# ===== Получение цены BTC =====
-def get_price():
-    try:
-        url = "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
-        data = requests.get(url).json()
-        return float(data["price"])
-    except:
-        return 0
+from binance_client import market_buy, market_sell, print_balance, get_price
 
 
-# ===== Основной бот =====
 def run_bot():
-    print("🚀 Starting AI Trading Bot (Simulation Mode)")
-
-    trader = PaperTrader()
-
-    # фикс если вдруг старый класс
-    if not hasattr(trader, "balance"):
-        trader.balance = 1000
-        trader.btc = 0
+    print("🚀 Starting AI Trading Bot (BINANCE MODE)")
 
     while True:
         price = get_price()
@@ -48,7 +29,6 @@ def run_bot():
         best_strategy = max(ai_result, key=ai_result.get)
         print(f"\nBEST STRATEGY: {best_strategy}")
 
-        # сигнал
         signal = "HOLD"
 
         try:
@@ -72,26 +52,27 @@ def run_bot():
 
         print(f"Signal: {signal}")
 
-        # торговля
+        # ===== РЕАЛЬНАЯ ТОРГОВЛЯ =====
         try:
             if signal == "BUY":
-                trader.buy(price, trader.balance * 0.1)
+                print("🟢 REAL BUY")
+                market_buy("BTCUSDT", 50)  # покупка на 50 USDT
 
             elif signal == "SELL":
-                trader.sell(price)
+                print("🔴 REAL SELL")
+                market_sell("BTCUSDT", 0.001)
 
         except Exception as e:
             print(f"Trade error: {e}")
 
-        # статус (без аргументов!)
+        # баланс
         try:
-            trader.status(price)
+            print_balance()
         except Exception as e:
-            print(f"Status error: {e}")
+            print(f"Balance error: {e}")
 
         time.sleep(5)
 
 
-# ===== запуск =====
-if __name__ == "__main__":
+if name == "__main__":
     run_bot()
