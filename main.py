@@ -12,70 +12,70 @@ def get_price():
         url = "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
         data = requests.get(url).json()
         return float(data["price"])
-    except Exception as e:
-        print("Ошибка получения цены:", e)
-        return None
+    except:
+        return 0
 
 
-# ===== Основной запуск =====
+# ===== Основной бот =====
 def run_bot():
     print("🚀 Starting AI Trading Bot (Simulation Mode)")
 
-    trader = PaperTrader(balance=1000)
+    trader = PaperTrader()
+
+    # 🔥 ФИКС если balance нет
+    if not hasattr(trader, "balance"):
+        trader.balance = 1000
+        trader.btc = 0
 
     while True:
-        print("\n===== MARKET DATA =====")
-
         price = get_price()
-        if not price:
-            continue
 
+        print("\n===== MARKET DATA =====")
         print(f"BTC price: {price}")
 
         # AI выбор стратегии
         ai_result = choose_best_strategy(price)[0]
 
-        print("\n===== AI ANALYSIS =====")
+        print("===== AI ANALYSIS =====")
         for k, v in ai_result.items():
             print(f"{k}: {v}")
 
+        # выбор лучшей стратегии
         best_strategy = max(ai_result, key=ai_result.get)
         print(f"\nBEST STRATEGY: {best_strategy}")
 
-        # ===== Запуск стратегии =====
+        # ===== СИГНАЛ =====
+        signal = "HOLD"
+
+        if best_strategy == "EMA":
+            signal = trading_strategies.ema_strategy(price)
+
+        elif best_strategy == "RSI":
+            signal = trading_strategies.rsi_strategy(price)
+
+        elif best_strategy == "Breakout":
+            signal = trading_strategies.breakout_strategy(price)
+
+        elif best_strategy == "Bollinger":
+            signal = trading_strategies.bollinger_strategy(price)
+
+        elif best_strategy == "Grid":
+            signal = trading_strategies.grid_strategy(price)
+
+        print(f"Signal: {signal}")
+
+        # ===== ТОРГОВЛЯ =====
         try:
-            if best_strategy == "EMA":
-                signal = trading_strategies.ema_strategy(price)
-
-            elif best_strategy == "RSI":
-                signal = trading_strategies.rsi_strategy(price)
-
-            elif best_strategy == "Breakout":
-                signal = trading_strategies.breakout_strategy(price)
-
-            elif best_strategy == "Bollinger":
-                signal = trading_strategies.bollinger_strategy(price)
-
-            elif best_strategy == "Grid":
-                signal = trading_strategies.grid_strategy(price)
-
-            else:
-                signal = "HOLD"
-
-            print(f"Signal: {signal}")
-
-            # ===== Выполнение сделки =====
             if signal == "BUY":
-                trader.buy(price, 100)
+                trader.buy(price, trader.balance * 0.1)
 
             elif signal == "SELL":
                 trader.sell(price)
 
-            print(f"Balance: {trader.balance}")
-            print(f"Position: {trader.position}")
+            trader.status()
 
         except Exception as e:
-            print("BOT ERROR:", e)
+            print(f"BOT ERROR: {e}")
 
         time.sleep(5)
 
