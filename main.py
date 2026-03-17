@@ -1,93 +1,100 @@
 import time
-from price_history import get_historical_prices
-from indicators import calculate_ema, calculate_rsi
 from binance_client import BinanceClient
+from indicators import calculate_ema, calculate_rsi
+from price_history import get_historical_prices
 
 SYMBOL = "BTCUSDT"
-SLEEP = 30  # секунд между циклами
+SLEEP = 10
 
-# риск-менеджмент
-RISK_PER_TRADE = 0.02  # 2% от депозита
-TAKE_PROFIT = 0.02     # 2%
-STOP_LOSS = 0.01       # 1%
-
-
-client = BinanceClient()
+RISK_PERCENT = 0.01  # 1% риск
+STOP_LOSS_PERCENT = 0.01  # 1%
+TAKE_PROFIT_PERCENT = 0.02  # 2%
 
 
-def get_signal(prices):
-    ema50 = calculate_ema(prices, 50)
-    ema200 = calculate_ema(prices, 200)
-    rsi = calculate_rsi(prices)
-
-    print("\n===== INDICATORS =====")
-    print(f"EMA50: {ema50}")
-    print(f"EMA200: {ema200}")
-    print(f"RSI: {rsi}")
-
-    # стратегия
-    if ema50 > ema200 and rsi < 35:
-        return "BUY"
-    elif ema50 < ema200 and rsi > 65:
-        return "SELL"
-    else:
-        return "HOLD"
-
-
-def calculate_position_size(usdt_balance, price):
-    risk_amount = usdt_balance * RISK_PER_TRADE
+def calculate_position_size(balance, price):
+    risk_amount = balance * RISK_PERCENT
     quantity = risk_amount / price
-    return round(quantity, 6)
+    return round(quantity, 5)
 
 
 def run_bot():
-    print("🚀 Starting REAL Trading Bot (EMA + RSI)")
+    client = BinanceClient()
 
     while True:
         try:
             prices = get_historical_prices(SYMBOL)
             current_price = prices[-1]
 
+            ema50 = calculate_ema(prices, 50)
+            ema200 = calculate_ema(prices, 200)
+            rsi = calculate_rsi(prices)
+
             print("\n===== MARKET DATA =====")
             print(f"BTC price: {current_price}")
 
-            signal = get_signal(prices)
+            print("\n===== INDICATORS =====")
+            print(f"EMA50: {ema50}")
+            print(f"EMA200: {ema200}")
+            print(f"RSI: {rsi}")
+
+            signal = "HOLD"
+
+            if ema50 > ema200 and rsi < 30:
+                signal = "BUY"
+            elif ema50 < ema200 and rsi > 70:
+                signal = "SELL"
+
             print(f"Signal: {signal}")
 
-            # баланс
-            usdt_balance = client.get_balance("USDT")
-            btc_balance = client.get_balance("BTC")
+            balance = client.get_balance("USDT")
+            print(f"\nBalance USDT: {balance}")
 
-            print("\n===== BALANCE =====")
-            print(f"USDT: {usdt_balance}")
-            print(f"BTC: {btc_balance}")
+            if balance == 0:
+                print("No balance → skip")
+                time.sleep(SLEEP)
+                continue
 
-            # позиция
-            qty = calculate_position_size(usdt_balance, current_price)
+            qty = calculate_position_size(balance, current_price)
 
-            # ===== ТОРГОВЛЯ =====
-            if signal == "BUY" and usdt_balance > 10:
-                print(f"🟢 BUY {qty} BTC")
+            # === FUTURES TRADING ===
+            if signal == "BUY":
+                print("Opening LONG")
 
-                client.market_buy(SYMBOL, qty)
+                entry = current_price
+                sl = entry * (1 - STOP_LOSS_PERCENT)
+                tp = entry * (1 + TAKE_PROFIT_PERCENT)
 
-                tp_price = current_price * (1 + TAKE_PROFIT)
-                sl_price = current_price * (1 - STOP_LOSS)
+                client.open_futures_position(
+                    symbol=SYMBOL,
+                    side="BUY",
+                    quantity=qty
+                )
 
-                print(f"TP: {tp_price} | SL: {sl_price}")
+                print(f"SL: {sl}, TP: {tp}")
 
-            elif signal == "SELL" and btc_balance > 0.0001:
-                print(f"🔴 SELL {qty} BTC")
+            elif signal == "SELL":
+                print("Opening SHORT")
 
-                client.market_sell(SYMBOL, qty)
+                entry = current_price
+                sl = entry * (1 + STOP_LOSS_PERCENT)
+                tp = entry * (1 - TAKE_PROFIT_PERCENT)
+
+                client.open_futures_position(
+                    symbol=SYMBOL,
+                    side="SELL",
+                    quantity=qty
+                )
+
+                print(f"SL: {sl}, TP: {tp}")
 
             else:
                 print("No trade")
 
-        except Exception as e:
-            print(f"❌ ERROR: {e}")
+            time.sleep(SLEEP)
 
-        time.sleep(SLEEP)
+        except Exception as e:
+            print("ERROR:", e)
+            time.sleep(SLEEP)
 
 
 if __name__ == "__main__":
