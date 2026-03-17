@@ -51,8 +51,8 @@ def run():
             spot_balance = usdt / 2
             futures_balance = usdt / 2
 
-            qty_spot = size(spot_balance, price)
-            qty_fut = size(futures_balance, price)
+            qty_spot = max(size(spot_balance, price), 0.0001)
+            qty_fut = max(size(futures_balance, price), 0.001)
 
             # ===== SPOT =====
             if signal == "BUY" and spot_balance > 10:
