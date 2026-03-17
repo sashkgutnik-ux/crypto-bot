@@ -22,7 +22,7 @@ def run_bot():
 
     trader = PaperTrader()
 
-    # 🔥 ФИКС если balance нет
+    # фикс если вдруг старый класс
     if not hasattr(trader, "balance"):
         trader.balance = 1000
         trader.btc = 0
@@ -33,38 +33,45 @@ def run_bot():
         print("\n===== MARKET DATA =====")
         print(f"BTC price: {price}")
 
-        # AI выбор стратегии
-        ai_result = choose_best_strategy(price)[0]
+        # AI
+        try:
+            ai_result = choose_best_strategy(price)[0]
+        except:
+            ai_result = choose_best_strategy(price)
 
         print("===== AI ANALYSIS =====")
         for k, v in ai_result.items():
             print(f"{k}: {v}")
 
-        # выбор лучшей стратегии
+        # выбор стратегии
         best_strategy = max(ai_result, key=ai_result.get)
         print(f"\nBEST STRATEGY: {best_strategy}")
 
-        # ===== СИГНАЛ =====
+        # сигнал
         signal = "HOLD"
 
-        if best_strategy == "EMA":
-            signal = trading_strategies.ema_strategy(price)
+        try:
+            if best_strategy == "EMA":
+                signal = trading_strategies.ema_strategy(price)
 
-        elif best_strategy == "RSI":
-            signal = trading_strategies.rsi_strategy(price)
+            elif best_strategy == "RSI":
+                signal = trading_strategies.rsi_strategy(price)
 
-        elif best_strategy == "Breakout":
-            signal = trading_strategies.breakout_strategy(price)
+            elif best_strategy == "Breakout":
+                signal = trading_strategies.breakout_strategy(price)
 
-        elif best_strategy == "Bollinger":
-            signal = trading_strategies.bollinger_strategy(price)
+            elif best_strategy == "Bollinger":
+                signal = trading_strategies.bollinger_strategy(price)
 
-        elif best_strategy == "Grid":
-            signal = trading_strategies.grid_strategy(price)
+            elif best_strategy == "Grid":
+                signal = trading_strategies.grid_strategy(price)
+
+        except Exception as e:
+            print(f"Strategy error: {e}")
 
         print(f"Signal: {signal}")
 
-        # ===== ТОРГОВЛЯ =====
+        # торговля
         try:
             if signal == "BUY":
                 trader.buy(price, trader.balance * 0.1)
@@ -72,14 +79,18 @@ def run_bot():
             elif signal == "SELL":
                 trader.sell(price)
 
-            trader.status()
-
         except Exception as e:
-            print(f"BOT ERROR: {e}")
+            print(f"Trade error: {e}")
+
+        # статус (без аргументов!)
+        try:
+            trader.status()
+        except Exception as e:
+            print(f"Status error: {e}")
 
         time.sleep(5)
 
 
-# ===== Запуск =====
-if __name__ == "__main__":
+# ===== запуск =====
+if name == "__main__":
     run_bot()
