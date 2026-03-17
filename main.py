@@ -10,7 +10,6 @@ from trading_strategies import ...
     breakout_strategy,
     bollinger_strategy,
     grid_strategy
-)
 
 
 # ===== Получение цены BTC =====
