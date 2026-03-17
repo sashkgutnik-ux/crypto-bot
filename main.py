@@ -4,91 +4,85 @@ from indicators import calculate_ema, calculate_rsi
 from price_history import get_historical_prices
 
 SYMBOL = "BTCUSDT"
-SLEEP = 10
+SLEEP = 15
 
-RISK_PERCENT = 0.01  # 1% риск
-STOP_LOSS_PERCENT = 0.01  # 1%
-TAKE_PROFIT_PERCENT = 0.02  # 2%
-
-
-def calculate_position_size(balance, price):
-    risk_amount = balance * RISK_PERCENT
-    quantity = risk_amount / price
-    return round(quantity, 5)
+RISK = 0.02
+SL = 0.01
 
 
-def run_bot():
+def size(balance, price):
+    return round((balance * RISK) / price, 5)
+
+
+def run():
     client = BinanceClient()
 
     while True:
         try:
             prices = get_historical_prices(SYMBOL)
-            current_price = prices[-1]
+            price = prices[-1]
 
             ema50 = calculate_ema(prices, 50)
             ema200 = calculate_ema(prices, 200)
             rsi = calculate_rsi(prices)
 
-            print("\n===== MARKET DATA =====")
-            print(f"BTC price: {current_price}")
-
-            print("\n===== INDICATORS =====")
-            print(f"EMA50: {ema50}")
-            print(f"EMA200: {ema200}")
-            print(f"RSI: {rsi}")
+            print("\nPRICE:", price)
+            print("EMA50:", ema50, "EMA200:", ema200, "RSI:", rsi)
 
             signal = "HOLD"
-
             if ema50 > ema200 and rsi < 30:
                 signal = "BUY"
             elif ema50 < ema200 and rsi > 70:
                 signal = "SELL"
 
-            print(f"Signal: {signal}")
+            print("Signal:", signal)
 
-            balance = client.get_balance("USDT")
-            print(f"\nBalance USDT: {balance}")
+            usdt = client.get_balance("USDT")
+            btc = client.get_balance("BTC")
 
-            if balance == 0:
-                print("No balance → skip")
+            print("USDT:", usdt, "BTC:", btc)
+
+            if usdt < 10:
+                print("❌ Not enough balance")
                 time.sleep(SLEEP)
                 continue
 
-            qty = calculate_position_size(balance, current_price)
+            # делим баланс
+            spot_balance = usdt / 2
+            futures_balance = usdt / 2
 
-            # === FUTURES TRADING ===
-            if signal == "BUY":
-                print("Opening LONG")
+            qty_spot = size(spot_balance, price)
+            qty_fut = size(futures_balance, price)
 
-                entry = current_price
-                sl = entry * (1 - STOP_LOSS_PERCENT)
-                tp = entry * (1 + TAKE_PROFIT_PERCENT)
+            # ===== SPOT =====
+            if signal == "BUY" and spot_balance > 10:
+                print("🟢 SPOT BUY")
+                client.spot_buy(SYMBOL, qty_spot)
 
-                client.open_futures_position(
-                    symbol=SYMBOL,
-                    side="BUY",
-                    quantity=qty
-                )
+            elif signal == "SELL" and btc > 0.0001:
+                print("🔴 SPOT SELL")
+                client.spot_sell(SYMBOL, btc)
 
-                print(f"SL: {sl}, TP: {tp}")
+            # ===== FUTURES =====
+            pos = client.get_position(SYMBOL)
 
-            elif signal == "SELL":
-                print("Opening SHORT")
+            if pos == 0:
+                if signal == "BUY":
+                    print("🟢 FUTURES LONG")
+                    client.futures_order(SYMBOL, "BUY", qty_fut)
 
-                entry = current_price
-                sl = entry * (1 + STOP_LOSS_PERCENT)
-                tp = entry * (1 - TAKE_PROFIT_PERCENT)
+                    sl_price = price * (1 - SL)
+                    client.set_stop_loss(SYMBOL, "BUY", sl_price)
 
-                client.open_futures_position(
-                    symbol=SYMBOL,
-                    side="SELL",
-                    quantity=qty
-                )
+                elif signal == "SELL":
+                    print("🔴 FUTURES SHORT")
+                    client.futures_order(SYMBOL, "SELL", qty_fut)
 
-                print(f"SL: {sl}, TP: {tp}")
+                    sl_price = price * (1 + SL)
+                    client.set_stop_loss(SYMBOL, "SELL", sl_price)
 
             else:
-                print("No trade")
+                print("⛔ Futures position exists")
 
             time.sleep(SLEEP)
 
@@ -97,5 +91,5 @@ def run_bot():
             time.sleep(SLEEP)
 
 
-if __name__ == "__main__":
-    run_bot()
+if name == "__main__":
+    run()
