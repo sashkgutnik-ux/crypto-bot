@@ -1,0 +1,20 @@
+class RiskManager:
+
+    def __init__(self, balance):
+
+        self.balance = balance
+        self.risk_per_trade = 0.01
+
+
+    def calculate_position_size(self, entry_price, stop_loss_price):
+
+        risk_amount = self.balance * self.risk_per_trade
+
+        stop_distance = abs(entry_price - stop_loss_price)
+
+        if stop_distance == 0:
+            return 0
+
+        position_size = risk_amount / stop_distance
+
+        return round(position_size, 4)
