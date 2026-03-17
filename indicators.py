@@ -1,79 +1,40 @@
-import requests
-import pandas as pd
+def calculate_ema(prices, period):
+    if len(prices) < period:
+        return prices[-1]
+
+    k = 2 / (period + 1)
+    ema = prices[0]
+
+    for price in prices:
+        ema = price * k + ema * (1 - k)
+
+    return ema
 
 
-def get_candles():
+def calculate_rsi(prices, period=14):
+    if len(prices) < period + 1:
+        return 50
 
-    url = "https://api.binance.com/api/v3/klines"
+    gains = []
+    losses = []
 
-    params = {
-        "symbol": "BTCUSDT",
-        "interval": "1m",
-        "limit": 100
-    }
+    for i in range(1, len(prices)):
+        diff = prices[i] - prices[i - 1]
 
-    data = requests.get(url, params=params).json()
+        if diff > 0:
+            gains.append(diff)
+            losses.append(0)
+        else:
+            gains.append(0)
+            losses.append(abs(diff))
 
-    df = pd.DataFrame(data)
+    avg_gain = sum(gains[-period:]) / period
+    avg_loss = sum(losses[-period:]) / period
 
-    df = df[[0,1,2,3,4]]
+    if avg_loss == 0:
+        return 100
 
-    df.columns = ["time","open","high","low","close"]
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
 
-    df["close"] = df["close"].astype(float)
-
-    return df
-
-
-# ===== EMA =====
-
-def ema(series, period):
-
-    return series.ewm(span=period, adjust=False).mean()
-
-
-# ===== RSI =====
-
-def rsi(series, period=14):
-
-    delta = series.diff()
-
-    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-
-    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-
-    rs = gain / loss
-
-    return 100 - (100 / (1 + rs))
-
-
-# ===== Bollinger =====
-
-def bollinger(series, period=20):
-
-    ma = series.rolling(window=period).mean()
-
-    std = series.rolling(window=period).std()
-
-    upper = ma + (std * 2)
-
-    lower = ma - (std * 2)
-
-    return upper, lower
-
-
-def calculate_indicators():
-
-    df = get_candles()
-
-    df["ema9"] = ema(df["close"], 9)
-    df["ema21"] = ema(df["close"], 21)
-
-    df["rsi"] = rsi(df["close"])
-
-    upper, lower = bollinger(df["close"])
-
-    df["bb_upper"] = upper
-    df["bb_lower"] = lower
-
-    return df
+    return rsi
