@@ -2,6 +2,7 @@ import time
 import requests
 
 from ai_strategy_selector import choose_best_strategy
+from binance_client import market_buy, market_sell, print_balance, get_price
 from paper_trader import PaperTrader
 import trading_strategies
 
