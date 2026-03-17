@@ -6,7 +6,7 @@ import hashlib
 
 class BinanceClient:
     def __init__(self):
-        self.API_KEY = "eCWy1i5O1Lh1pcUQwHNVeXSTPF6iAvJAEzD0MCun050Sq6jZyWDlFbbQjPX2e73w"
+        self.API_KEY = "BMVC76X6dijOPNKXZQCWKvyIFB6s7pMwzMuSAaEhL0DbAPs715W3B3gLUNIPnA3u"
         self.API_SECRET = "kkiygYBvpMADFOTNwbDFV3kv65HsvonOXqwRuSDZLf4GlHYwyaSQjh7zDBHRY4tZ"
         self.BASE_URL = "https://api.binance.com"
 
