@@ -66,7 +66,7 @@ def run_bot():
 
             # ===== Выполнение сделки =====
             if signal == "BUY":
-                trader.buy(price)
+                trader.buy(price, 100)
 
             elif signal == "SELL":
                 trader.sell(price)
