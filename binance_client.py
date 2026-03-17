@@ -7,8 +7,8 @@ class BinanceClient:
     BASE_URL = "https://api.binance.com"
 
     def __init__(self, api_key, api_secret):
-    self.API_KEY = api_key
-    self.API_SECRET = api_secret
+        self.API_KEY = api_key
+        self.API_SECRET = api_secret
 
     def _sign(self, query):
         return hmac.new(
