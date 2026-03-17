@@ -3,18 +3,23 @@ from binance_client import BinanceClient
 from indicators import calculate_ema, calculate_rsi
 from price_history import get_historical_prices
 
-SYMBOL = "BTCUSDT"
+SYMBOL = "BTCUSDC"
 SLEEP = 15
 
-RISK = 0.02
-SL = 0.01
+RISK = 0.02  # 2%
+STOP_LOSS = 0.01  # 1%
+
+in_position = False
+entry_price = 0
 
 
-def size(balance, price):
+def position_size(balance, price):
     return round((balance * RISK) / price, 5)
 
 
 def run():
+    global in_position, entry_price
+
     client = BinanceClient()
 
     while True:
@@ -30,6 +35,7 @@ def run():
             print("EMA50:", ema50, "EMA200:", ema200, "RSI:", rsi)
 
             signal = "HOLD"
+
             if ema50 > ema200 and rsi < 30:
                 signal = "BUY"
             elif ema50 < ema200 and rsi > 70:
@@ -37,52 +43,34 @@ def run():
 
             print("Signal:", signal)
 
-            usdt = client.get_balance("USDT")
+            usdc = client.get_balance("USDC")
             btc = client.get_balance("BTC")
 
-            print("USDT:", usdt, "BTC:", btc)
+            print("USDC:", usdc, "BTC:", btc)
 
-            if usdt < 10:
-                print("❌ Not enough balance")
-                time.sleep(SLEEP)
-                continue
+            # ===== BUY =====
+            if signal == "BUY" and not in_position and usdc > 10:
+                qty = max(position_size(usdc, price), 0.0001)
 
-            # делим баланс
-            spot_balance = usdt / 2
-            futures_balance = usdt / 2
+                print("🟢 BUY BTC")
+                client.buy(SYMBOL, qty)
 
-            qty_spot = max(size(spot_balance, price), 0.0001)
-            qty_fut = max(size(futures_balance, price), 0.001)
+                entry_price = price
+                in_position = True
 
-            # ===== SPOT =====
-            if signal == "BUY" and spot_balance > 10:
-                print("🟢 SPOT BUY")
-                client.spot_buy(SYMBOL, qty_spot)
+            # ===== SELL =====
+            elif signal == "SELL" and in_position and btc > 0.00001:
+                print("🔴 SELL BTC")
+                client.sell(SYMBOL, btc)
 
-            elif signal == "SELL" and btc > 0.0001:
-                print("🔴 SPOT SELL")
-                client.spot_sell(SYMBOL, btc)
+                in_position = False
 
-            # ===== FUTURES =====
-            pos = client.get_position(SYMBOL)
-
-            if pos == 0:
-                if signal == "BUY":
-                    print("🟢 FUTURES LONG")
-                    client.futures_order(SYMBOL, "BUY", qty_fut)
-
-                    sl_price = price * (1 - SL)
-                    client.set_stop_loss(SYMBOL, "BUY", sl_price)
-
-                elif signal == "SELL":
-                    print("🔴 FUTURES SHORT")
-                    client.futures_order(SYMBOL, "SELL", qty_fut)
-
-                    sl_price = price * (1 + SL)
-                    client.set_stop_loss(SYMBOL, "SELL", sl_price)
-
-            else:
-                print("⛔ Futures position exists")
+            # ===== STOP LOSS =====
+            if in_position:
+                if price <= entry_price * (1 - STOP_LOSS):
+                    print("🛑 STOP LOSS TRIGGERED")
+                    client.sell(SYMBOL, btc)
+                    in_position = False
 
             time.sleep(SLEEP)
 
