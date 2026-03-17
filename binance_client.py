@@ -49,7 +49,7 @@ class BinanceClient:
     def get_balance(self):
         data = self._request("GET", "/fapi/v2/account")
 
-        for asset in data["assets"]:
+        for asset in data["balances"]:
             if asset["asset"] == "USDT":
                 return float(asset["availableBalance"])
 
