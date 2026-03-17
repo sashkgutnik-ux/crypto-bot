@@ -1,59 +1,31 @@
-import random
-
-
+# ===== EMA Strategy =====
 def ema_strategy(price):
-
-    if random.random() > 0.65:
-        return "buy"
-
-    if random.random() < 0.35:
-        return "sell"
-
-    return "hold"
+    if price % 2 == 0:
+        return "BUY"
+    return "SELL"
 
 
-
+# ===== RSI Strategy =====
 def rsi_strategy(price):
-
-    rsi = random.randint(20, 80)
-
-    if rsi < 30:
-        return "buy"
-
-    if rsi > 70:
-        return "sell"
-
-    return "hold"
+    if price % 3 == 0:
+        return "BUY"
+    return "SELL"
 
 
-
+# ===== Breakout Strategy =====
 def breakout_strategy(price):
-
-    if random.random() > 0.7:
-        return "buy"
-
-    if random.random() < 0.3:
-        return "sell"
-
-    return "hold"
+    if price % 5 == 0:
+        return "BUY"
+    return "SELL"
 
 
-
+# ===== Bollinger Strategy =====
 def bollinger_strategy(price):
-
-    if random.random() > 0.65:
-        return "buy"
-
-    if random.random() < 0.35:
-        return "sell"
-
-    return "hold"
+    if price % 7 == 0:
+        return "BUY"
+    return "SELL"
 
 
-
+# ===== Grid Strategy =====
 def grid_strategy(price):
-
-    if random.random() > 0.5:
-        return "buy"
-
-    return "sell"
+    return "HOLD"
