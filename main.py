@@ -1,112 +1,93 @@
 import time
-from binance_client import get_price, market_buy, market_sell, get_balance
-from indicators import calculate_ema, calculate_rsi
 from price_history import get_historical_prices
+from indicators import calculate_ema, calculate_rsi
+from binance_client import BinanceClient
 
 SYMBOL = "BTCUSDT"
+SLEEP = 30  # секунд между циклами
 
-# === НАСТРОЙКИ ===
-RISK_PER_TRADE = 0.05   # 5% депозита
-STOP_LOSS = 0.97        # -3%
-TAKE_PROFIT = 1.03      # +3%
-
-EMA_FAST = 50
-EMA_SLOW = 200
-
-RSI_PERIOD = 14
-
-in_position = False
-entry_price = 0
+# риск-менеджмент
+RISK_PER_TRADE = 0.02  # 2% от депозита
+TAKE_PROFIT = 0.02     # 2%
+STOP_LOSS = 0.01       # 1%
 
 
-def check_signal(prices):
-    ema_fast = calculate_ema(prices, EMA_FAST)
-    ema_slow = calculate_ema(prices, EMA_SLOW)
-    rsi = calculate_rsi(prices, RSI_PERIOD)
+client = BinanceClient()
+
+
+def get_signal(prices):
+    ema50 = calculate_ema(prices, 50)
+    ema200 = calculate_ema(prices, 200)
+    rsi = calculate_rsi(prices)
 
     print("\n===== INDICATORS =====")
-    print(f"EMA{EMA_FAST}: {ema_fast}")
-    print(f"EMA{EMA_SLOW}: {ema_slow}")
+    print(f"EMA50: {ema50}")
+    print(f"EMA200: {ema200}")
     print(f"RSI: {rsi}")
 
-    # === ЛОГИКА ===
-    if ema_fast > ema_slow and rsi < 30:
+    # стратегия
+    if ema50 > ema200 and rsi < 35:
         return "BUY"
-
-    elif ema_fast < ema_slow and rsi > 70:
+    elif ema50 < ema200 and rsi > 65:
         return "SELL"
-
-    return "HOLD"
+    else:
+        return "HOLD"
 
 
 def calculate_position_size(usdt_balance, price):
-    amount_usdt = usdt_balance * RISK_PER_TRADE
-    btc_amount = amount_usdt / price
-    return round(btc_amount, 6)
+    risk_amount = usdt_balance * RISK_PER_TRADE
+    quantity = risk_amount / price
+    return round(quantity, 6)
 
 
 def run_bot():
-    global in_position, entry_price
-
     print("🚀 Starting REAL Trading Bot (EMA + RSI)")
 
     while True:
         try:
-            price = get_price(SYMBOL)
             prices = get_historical_prices(SYMBOL)
+            current_price = prices[-1]
 
             print("\n===== MARKET DATA =====")
-            print(f"BTC price: {price}")
+            print(f"BTC price: {current_price}")
 
-            signal = check_signal(prices)
+            signal = get_signal(prices)
             print(f"Signal: {signal}")
 
-            usdt, btc = get_balance()
+            # баланс
+            usdt_balance = client.get_balance("USDT")
+            btc_balance = client.get_balance("BTC")
 
             print("\n===== BALANCE =====")
-            print(f"USDT: {usdt}")
-            print(f"BTC: {btc}")
+            print(f"USDT: {usdt_balance}")
+            print(f"BTC: {btc_balance}")
 
-            # === ЕСЛИ НЕ В ПОЗИЦИИ ===
-            if not in_position:
+            # позиция
+            qty = calculate_position_size(usdt_balance, current_price)
 
-                if signal == "BUY":
-                    amount = calculate_position_size(usdt, price)
+            # ===== ТОРГОВЛЯ =====
+            if signal == "BUY" and usdt_balance > 10:
+                print(f"🟢 BUY {qty} BTC")
 
-                    print(f"\n🟢 BUY {amount} BTC")
+                client.market_buy(SYMBOL, qty)
 
-                    market_buy(SYMBOL, amount)
+                tp_price = current_price * (1 + TAKE_PROFIT)
+                sl_price = current_price * (1 - STOP_LOSS)
 
-                    entry_price = price
-                    in_position = True
+                print(f"TP: {tp_price} | SL: {sl_price}")
 
-            # === ЕСЛИ В ПОЗИЦИИ ===
+            elif signal == "SELL" and btc_balance > 0.0001:
+                print(f"🔴 SELL {qty} BTC")
+
+                client.market_sell(SYMBOL, qty)
+
             else:
-                print(f"\n📊 In position at {entry_price}")
-
-                # STOP LOSS
-                if price <= entry_price * STOP_LOSS:
-                    print("🔴 STOP LOSS")
-                    market_sell(SYMBOL, btc)
-                    in_position = False
-
-                # TAKE PROFIT
-                elif price >= entry_price * TAKE_PROFIT:
-                    print("🟢 TAKE PROFIT")
-                    market_sell(SYMBOL, btc)
-                    in_position = False
-
-                # SIGNAL SELL (по стратегии)
-                elif signal == "SELL":
-                    print("⚠️ Strategy SELL")
-                    market_sell(SYMBOL, btc)
-                    in_position = False
-
-            time.sleep(10)
+                print("No trade")
 
         except Exception as e:
             print(f"❌ ERROR: {e}")
-            time.sleep(10)
+
+        time.sleep(SLEEP)
 
 
 if __name__ == "__main__":
