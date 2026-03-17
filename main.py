@@ -5,11 +5,6 @@ from ai_strategy_selector import choose_best_strategy
 from paper_trader import PaperTrader
 
 import trading_strategies
-    ema_strategy,
-    rsi_strategy,
-    breakout_strategy,
-    bollinger_strategy,
-    grid_strategy
 
 
 # ===== Получение цены BTC =====
