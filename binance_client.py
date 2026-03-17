@@ -7,8 +7,8 @@ class BinanceClient:
     BASE_URL = "https://api.binance.com"
 
     def __init__(self, api_key, api_secret):
-        self.API_KEY = "r56MESicmmVM5XlD6k12c5FKz8aqtHsDNMD9tHVwnHHbBU5wBXss6QmHBQs7lU6a"
-        self.API_SECRET = "gOHq0bj1a5U2cS5xa1FpLrglEXS0ytm6pSxLsIAwYz3T3YemWYBy5SRvipr8Alvw"
+        self.API_KEY = r56MESicmmVM5XlD6k12c5FKz8aqtHsDNMD9tHVwnHHbBU5wBXss6QmHBQs7lU6a
+        self.API_SECRET = gOHq0bj1a5U2cS5xa1FpLrglEXS0ytm6pSxLsIAwYz3T3YemWYBy5SRvipr8Alvw
 
     def _sign(self, query):
         return hmac.new(
@@ -44,7 +44,6 @@ class BinanceClient:
 
         return data
 
-    # ===== BALANCE =====
     def get_balance(self, asset):
         data = self._request("GET", "/api/v3/account")
 
@@ -57,12 +56,10 @@ class BinanceClient:
 
         return 0
 
-    # ===== PRICE =====
     def get_price(self, symbol):
         r = requests.get(f"{self.BASE_URL}/api/v3/ticker/price?symbol={symbol}")
         return float(r.json()["price"])
 
-    # ===== ORDER =====
     def order(self, symbol, side, quantity):
         return self._request("POST", "/api/v3/order", {
             "symbol": symbol,
