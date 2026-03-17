@@ -1,7 +1,7 @@
 import time
 import requests
 
-from ai_strategy import choose_best_strategy
+from ai_strategy_selector import choose_best_strategy
 from simulation.paper_trader import PaperTrader
 
 from strategy.trading_strategies import (
