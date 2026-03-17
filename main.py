@@ -3,114 +3,83 @@ import requests
 
 from ai_strategy_selector import choose_best_strategy
 from paper_trader import PaperTrader
-
 import trading_strategies
 
 
 # ===== Получение цены BTC =====
-
 def get_price():
-
     try:
-
-        url = "https://api.coingecko.com/api/v3/simple/price"
-
-        params = {
-            "ids": "bitcoin",
-            "vs_currencies": "usd"
-        }
-
-        response = requests.get(url, params=params)
-
-        data = response.json()
-
-        return data["bitcoin"]["usd"]
-
-    except:
-
-        return 73000
+        url = "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
+        data = requests.get(url).json()
+        return float(data["price"])
+    except Exception as e:
+        print("Ошибка получения цены:", e)
+        return None
 
 
-# ===== Основной цикл =====
-
-def main():
-
+# ===== Основной запуск =====
+def run_bot():
     print("🚀 Starting AI Trading Bot (Simulation Mode)")
 
     trader = PaperTrader(balance=1000)
 
     while True:
+        print("\n===== MARKET DATA =====")
 
+        price = get_price()
+        if not price:
+            continue
+
+        print(f"BTC price: {price}")
+
+        # AI выбор стратегии
+        ai_result = choose_best_strategy(price)
+
+        print("\n===== AI ANALYSIS =====")
+        for k, v in ai_result.items():
+            print(f"{k}: {v}")
+
+        best_strategy = max(ai_result, key=ai_result.get)
+        print(f"\nBEST STRATEGY: {best_strategy}")
+
+        # ===== Запуск стратегии =====
         try:
-
-            price = get_price()
-
-            print("\n===== MARKET DATA =====")
-            print("BTC price:", price)
-
-            market_data = {
-                "btc_price": price
-            }
-
-            scores, best_strategy = choose_best_strategy(market_data)
-
-            print("\n===== AI ANALYSIS =====")
-
-            for name, value in scores.items():
-                print(name, ":", value)
-
-            print("\nBEST STRATEGY:", best_strategy)
-
-            # ===== Запуск стратегии =====
-
             if best_strategy == "EMA":
-
-                decision = ema_strategy(price)
+                signal = trading_strategies.ema_strategy(price)
 
             elif best_strategy == "RSI":
-
-                decision = rsi_strategy(price)
+                signal = trading_strategies.rsi_strategy(price)
 
             elif best_strategy == "Breakout":
-
-                decision = breakout_strategy(price)
+                signal = trading_strategies.breakout_strategy(price)
 
             elif best_strategy == "Bollinger":
-
-                decision = bollinger_strategy(price)
+                signal = trading_strategies.bollinger_strategy(price)
 
             elif best_strategy == "Grid":
-
-                decision = grid_strategy(price)
+                signal = trading_strategies.grid_strategy(price)
 
             else:
+                signal = "HOLD"
 
-                decision = "hold"
+            print(f"Signal: {signal}")
 
-            print("Decision:", decision)
+            # ===== Выполнение сделки =====
+            if signal == "BUY":
+                trader.buy(price)
 
-            # ===== Симуляция сделки =====
-
-            if decision == "buy":
-
-                trader.buy(price, 100)
-
-            elif decision == "sell":
-
+            elif signal == "SELL":
                 trader.sell(price)
 
-            trader.status(price)
-
-            time.sleep(10)
+            print(f"Balance: {trader.balance}")
+            print(f"Position: {trader.position}")
 
         except Exception as e:
-
             print("BOT ERROR:", e)
-            time.sleep(5)
+
+        time.sleep(5)
 
 
 # ===== Запуск =====
-
-if __name__ == "__main__":
-
-    main()
+if name == "__main__":
+    run_bot()
