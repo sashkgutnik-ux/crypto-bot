@@ -1,4 +1,3 @@
-> Sasha:
 import time
 import requests
 from collections import deque
