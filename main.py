@@ -1,3 +1,4 @@
+> Sasha:
 import time
 import requests
 from collections import deque
@@ -21,9 +22,10 @@ DIP_THRESHOLD = -0.03
 SECOND_DIP = -0.025
 
 COOLDOWN = 300
+FEE = 0.001
 
 # =========================
-# P2P НАСТРОЙКИ
+# P2P
 # =========================
 SPREAD_MIN = 0.4
 SPREAD_MAX = 3.0
@@ -44,10 +46,11 @@ def send(msg):
         pass
 
 # =========================
-# HELPERS
+# REAL PRICE
 # =========================
 def get_price():
-    return float(client.get_symbol_ticker(symbol=SYMBOL)["price"])
+    url = f"https://api.binance.com/api/v3/ticker/price?symbol={SYMBOL}"
+    return float(requests.get(url).json()["price"])
 
 def get_balance(asset="USDT"):
     return float(client.get_asset_balance(asset=asset)["free"])
@@ -74,11 +77,8 @@ def get_binance_p2p():
 
     valid = []
     for o in offers:
-        adv = o["adv"]
-        advertiser = o["advertiser"]
-
-        if advertiser["monthOrderCount"] >= 99:
-            valid.append(float(adv["price"]))
+        if o["advertiser"]["monthOrderCount"] >= 99:
+            valid.append(float(o["adv"]["price"]))
 
     return min(valid) if valid else None
 
@@ -106,32 +106,31 @@ def get_bybit_p2p():
 
 def check_p2p():
     try:
-        binance_price = get_binance_p2p()
-        bybit_price = get_bybit_p2p()
+        b_price = get_binance_p2p()
+        y_price = get_bybit_p2p()
 
-        if not binance_price or not bybit_price:
+        if not b_price or not y_price:
             return
 
-        spread = (binance_price - bybit_price) / bybit_price * 100
+        spread = (b_price - y_price) / y_price * 100
 
         if SPREAD_MIN <= spread <= SPREAD_MAX:
             send(f"""
-💰 P2P СВЯЗКА
+💰 P2P
 
-Buy Bybit: {bybit_price}
-Sell Binance: {binance_price}
+Buy Bybit: {y_price}
+Sell Binance: {b_price}
 
 Спред: {round(spread,2)}%
 """)
 
-    except Exception as e:
-        print("P2P ERROR:", e)
+    except:
+        pass
 
 # =========================
 # STATE
 # =========================
 prices = deque(maxlen=50)
-
 position = None
 cooldown_until = 0
 
@@ -163,28 +162,22 @@ def market_safe():
 # =========================
 # MAIN
 # =========================
-print("🚀 TESTNET BOT STARTED")
-send("🚀 TESTNET BOT STARTED")
+print("🚀 BOT STARTED")
+send("🚀 BOT STARTED")
 
-last_p2p_check = 0
+last_p2p = 0
 
 while True:
     try:
         price = get_price()
         prices.append(price)
 
-        print(f"PRICE: {price}")
+        print("PRICE:", price)
 
-        # =========================
-        # P2P CHECK (раз в 60 сек)
-        # =========================
-        if time.time() - last_p2p_check > 60:
+        if time.time() - last_p2p > 60:
             check_p2p()
-            last_p2p_check = time.time()
+            last_p2p = time.time()
 
-        # =========================
-        # ENTRY
-        # =========================
         if position is None and time.time() > cooldown_until:
 
             if len(prices) > 10:
@@ -195,84 +188,64 @@ while True:
                     if is_stable() or bounce_detected():
 
                         usdt = get_balance("USDT")
-                        trade_amount = usdt * 0.2
-                        qty = round(trade_amount / price, 6)
+                        amount = usdt * 0.2
+                        qty = round(amount / price, 6)
 
-                        client.order_market_buy(
-                            symbol=SYMBOL,
-                            quantity=qty
-                        )
+                        client.order_market_buy(symbol=SYMBOL, quantity=qty)
 
                         position = {
                             "entry": price,
                             "qty": qty,
+                            "amount": amount,
                             "second": False
                         }
 
-                        send(f"""
-🟢 BUY 1
-Price: {price}
-Qty: {qty}
-USDT: {usdt}
-""")
+                        send(f"🟢 BUY {price}")
 
-        # =========================
-        # POSITION
-        # =========================
         elif position:
 
-            avg_price = position["entry"]
+            avg = position["entry"]
 
             if not position["second"]:
-                drop = percent_change(position["entry"], price)
+                drop = percent_change(avg, price)
 
                 if drop <= SECOND_DIP and (is_stable() or bounce_detected()):
 
                     usdt = get_balance("USDT")
-                    trade_amount = usdt * 0.2
-                    qty = round(trade_amount / price, 6)
+                    amount = usdt * 0.2
+                    qty = round(amount / price, 6)
 
-                    client.order_market_buy(
-                        symbol=SYMBOL,
-                        quantity=qty
-                    )
+                    client.order_market_buy(symbol=SYMBOL, quantity=qty)
 
                     position["qty"] += qty
-                    position["entry"] = (avg_price + price) / 2
+                    position["amount"] += amount
+                    position["entry"] = position["amount"] / position["qty"]
                     position["second"] = True
 
                     send(f"🟡 BUY 2 {price}")
 
-            profit = percent_change(avg_price, price)
+            avg = position["entry"]
 
-            if profit >= TAKE_PROFIT:
+            gross = percent_change(avg, price)
+            net = gross - (FEE * 2)
 
-                client.order_market_sell(
-                    symbol=SYMBOL,
-                    quantity=round(position["qty"], 6)
-                )
+            pnl = position["qty"] * (price - avg)
+            pnl -= position["amount"] * FEE * 2
 
-                send(f"""
-✅ SELL TP
-Price: {price}
-Profit: {round(profit*100,2)}%
-""")
+            if net >= TAKE_PROFIT:
+
+                client.order_market_sell(symbol=SYMBOL, quantity=round(position["qty"], 6))
+
+                send(f"✅ TP {round(net*100,2)}% | {round(pnl,2)}$")
 
                 position = None
                 cooldown_until = time.time() + COOLDOWN
 
-            elif profit <= -STOP_LOSS:
+            elif net <= -STOP_LOSS:
 
-                client.order_market_sell(
-                    symbol=SYMBOL,
-                    quantity=round(position["qty"], 6)
-                )
+                client.order_market_sell(symbol=SYMBOL, quantity=round(position["qty"], 6))
 
-                send(f"""
-❌ SELL SL
-Price: {price}
-Loss: {round(profit*100,2)}%
-""")
+                send(f"❌ SL {round(net*100,2)}% | {round(pnl,2)}$")
 
                 position = None
                 cooldown_until = time.time() + COOLDOWN
