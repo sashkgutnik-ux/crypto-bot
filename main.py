@@ -23,10 +23,16 @@ SECOND_DIP = -0.025
 COOLDOWN = 300
 
 # =========================
+# P2P НАСТРОЙКИ
+# =========================
+SPREAD_MIN = 0.4
+SPREAD_MAX = 3.0
+
+# =========================
 # TELEGRAM
 # =========================
-BOT_TOKEN = "8691332194:AAEFEy49VmViDx9PQ3mTPYPF4hTZLGX3CI0"
-CHAT_ID = "8039241406"
+BOT_TOKEN = "r56MESicmmVM5XlD6k12c5FKz8aqtHsDNMD9tHVwnHHbBU5wBXss6QmHBQs7lU6a"
+CHAT_ID = "gOHq0bj1a5U2cS5xa1FpLrglEXS0ytm6pSxLsIAwYz3T3YemWYBy5SRvipr8Alvw"
 
 def send(msg):
     try:
@@ -48,6 +54,78 @@ def get_balance(asset="USDT"):
 
 def percent_change(old, new):
     return (new - old) / old
+
+# =========================
+# P2P SCANNER
+# =========================
+def get_binance_p2p():
+    url = "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
+    data = {
+        "asset": "USDT",
+        "fiat": "EUR",
+        "tradeType": "SELL",
+        "page": 1,
+        "rows": 5,
+        "payTypes": ["SEPA"]
+    }
+
+    res = requests.post(url, json=data).json()
+    offers = res.get("data", [])
+
+    valid = []
+    for o in offers:
+        adv = o["adv"]
+        advertiser = o["advertiser"]
+
+        if advertiser["monthOrderCount"] >= 99:
+            valid.append(float(adv["price"]))
+
+    return min(valid) if valid else None
+
+
+def get_bybit_p2p():
+    url = "https://api2.bybit.com/fiat/otc/item/online"
+    data = {
+        "tokenId": "USDT",
+        "currencyId": "EUR",
+        "side": "0",
+        "page": 1,
+        "size": 5
+    }
+
+    res = requests.post(url, json=data).json()
+    offers = res.get("result", {}).get("items", [])
+
+    valid = []
+    for o in offers:
+        if o["recentExecuteRate"] >= 99:
+            valid.append(float(o["price"]))
+
+    return max(valid) if valid else None
+
+
+def check_p2p():
+    try:
+        binance_price = get_binance_p2p()
+        bybit_price = get_bybit_p2p()
+
+        if not binance_price or not bybit_price:
+            return
+
+        spread = (binance_price - bybit_price) / bybit_price * 100
+
+        if SPREAD_MIN <= spread <= SPREAD_MAX:
+            send(f"""
+💰 P2P СВЯЗКА
+
+Buy Bybit: {bybit_price}
+Sell Binance: {binance_price}
+
+Спред: {round(spread,2)}%
+""")
+
+    except Exception as e:
+        print("P2P ERROR:", e)
 
 # =========================
 # STATE
@@ -88,6 +166,8 @@ def market_safe():
 print("🚀 TESTNET BOT STARTED")
 send("🚀 TESTNET BOT STARTED")
 
+last_p2p_check = 0
+
 while True:
     try:
         price = get_price()
@@ -96,9 +176,17 @@ while True:
         print(f"PRICE: {price}")
 
         # =========================
+        # P2P CHECK (раз в 60 сек)
+        # =========================
+        if time.time() - last_p2p_check > 60:
+            check_p2p()
+            last_p2p_check = time.time()
+
+        # =========================
         # ENTRY
         # =========================
-        if position is None and time.time() > cooldown_until:
+        if position is None and time.
+time() > cooldown_until:
 
             if len(prices) > 10:
                 change = percent_change(prices[0], price)
@@ -111,7 +199,7 @@ while True:
                         trade_amount = usdt * 0.2
                         qty = round(trade_amount / price, 6)
 
-                        order = client.order_market_buy(
+                        client.order_market_buy(
                             symbol=SYMBOL,
                             quantity=qty
                         )
@@ -136,7 +224,6 @@ USDT: {usdt}
 
             avg_price = position["entry"]
 
-            # ДОКУПКА
             if not position["second"]:
                 drop = percent_change(position["entry"], price)
 
@@ -159,13 +246,11 @@ USDT: {usdt}
 
             profit = percent_change(avg_price, price)
 
-            # TAKE PROFIT
             if profit >= TAKE_PROFIT:
 
                 client.order_market_sell(
                     symbol=SYMBOL,
-
-quantity=round(position["qty"], 6)
+                    quantity=round(position["qty"], 6)
                 )
 
                 send(f"""
@@ -177,7 +262,6 @@ Profit: {round(profit*100,2)}%
                 position = None
                 cooldown_until = time.time() + COOLDOWN
 
-            # STOP LOSS
             elif profit <= -STOP_LOSS:
 
                 client.order_market_sell(
