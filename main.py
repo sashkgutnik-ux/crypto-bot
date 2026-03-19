@@ -19,16 +19,18 @@ COOLDOWN = 900
 # TELEGRAM
 # =========================
 BOT_TOKEN = "8691332194:AAEFEy49VmViDx9PQ3mTPYPF4hTZLGX3CI0"
-CHAT_ID = "8039241406"
+CHAT_ID = 8039241406  # БЕЗ КАВЫЧЕК
 
 def send(msg):
     try:
-        requests.get(
-            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-            params={"chat_id": CHAT_ID, "text": msg}
-        )
-    except:
-        pass
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        r = requests.get(url, params={
+            "chat_id": CHAT_ID,
+            "text": msg
+        })
+        print("TG:", r.text)
+    except Exception as e:
+        print("TG ERROR:", e)
 
 # =========================
 # PRICE
@@ -69,10 +71,14 @@ def btc_market_ok():
     return change > -0.05
 
 # =========================
-# MAIN LOOP
+# START
 # =========================
 print("BOT STARTED")
+send("🚀 BOT STARTED")
 
+# =========================
+# MAIN LOOP
+# =========================
 while True:
     try:
         price = get_price()
@@ -150,7 +156,6 @@ while True:
                 cooldown_until = time.time() + COOLDOWN
 
         time.sleep(10)
-
-    except Exception as e:
+except Exception as e:
         print("ERROR:", e)
         time.sleep(5)
