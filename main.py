@@ -185,8 +185,7 @@ while True:
         # =========================
         # ENTRY
         # =========================
-        if position is None and time.
-time() > cooldown_until:
+        if position is None and time.time() > cooldown_until:
 
             if len(prices) > 10:
                 change = percent_change(prices[0], price)
