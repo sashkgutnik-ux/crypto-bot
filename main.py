@@ -86,9 +86,6 @@ while True:
 
         print(f"PRICE: {price}")
 
-        # =========================
-        # NO POSITION → ENTRY
-        # =========================
         if position is None and time.time() > cooldown_until:
 
             if len(prices) > 10:
@@ -106,16 +103,10 @@ while True:
                         send(f"🟢 BUY 1: {price}")
                         print("BUY 1")
 
-        # =========================
-        # POSITION OPEN
-        # =========================
         elif position:
 
             avg_price = position["entry"]
 
-            # =========================
-            # SECOND BUY
-            # =========================
             if position["second_entry"] is None:
                 drop = percent_change(position["entry"], price)
 
@@ -127,17 +118,11 @@ while True:
                     send(f"🟡 BUY 2: {price}")
                     print("BUY 2")
 
-            # =========================
-            # AVG PRICE
-            # =========================
             if position["second_entry"]:
                 avg_price = (position["entry"] + position["second_entry"]) / 2
 
             profit = percent_change(avg_price, price)
 
-            # =========================
-            # TAKE PROFIT
-            # =========================
             if profit >= TAKE_PROFIT:
                 send(f"✅ SELL TP: {price} | {round(profit*100,2)}%")
                 print("SELL TP")
@@ -145,9 +130,6 @@ while True:
                 position = None
                 cooldown_until = time.time() + COOLDOWN
 
-            # =========================
-            # STOP LOSS
-            # =========================
             elif profit <= -STOP_LOSS:
                 send(f"❌ SELL SL: {price} | {round(profit*100,2)}%")
                 print("SELL SL")
@@ -156,6 +138,7 @@ while True:
                 cooldown_until = time.time() + COOLDOWN
 
         time.sleep(10)
-except Exception as e:
+
+    except Exception as e:
         print("ERROR:", e)
         time.sleep(5)
