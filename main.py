@@ -31,8 +31,8 @@ SPREAD_MAX = 3.0
 # =========================
 # TELEGRAM
 # =========================
-BOT_TOKEN = "r56MESicmmVM5XlD6k12c5FKz8aqtHsDNMD9tHVwnHHbBU5wBXss6QmHBQs7lU6a"
-CHAT_ID = "gOHq0bj1a5U2cS5xa1FpLrglEXS0ytm6pSxLsIAwYz3T3YemWYBy5SRvipr8Alvw"
+BOT_TOKEN = "8691332194:AAEFEy49VmViDx9PQ3mTPYPF4hTZLGX3CI0"
+CHAT_ID = "8039241406"
 
 def send(msg):
     try:
