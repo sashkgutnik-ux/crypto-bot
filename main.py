@@ -1,102 +1,162 @@
 import time
 import requests
-from binance_client import BinanceClient
+from collections import deque
 
-# ===== ВСТАВЬ СВОИ ДАННЫЕ =====
-API_KEY = "r56MESicmmVM5XlD6k12c5FKz8aqtHsDNMD9tHVwnHHbBU5wBXss6QmHBQs7lU6a"
-API_SECRET = "gOHq0bj1a5U2cS5xa1FpLrglEXS0ytm6pSxLsIAwYz3T3YemWYBy5SRvipr8Alvw"
+# =========================
+# НАСТРОЙКИ
+# =========================
+SYMBOL = "BTCUSDT"
 
-TELEGRAM_TOKEN = "8691332194:AAEFEy49VmViDx9PQ3mTPYPF4hTZLGX3CI0"
+TRADE_AMOUNT = 100  # виртуальные USDT
+TAKE_PROFIT = 0.025  # 2.5%
+STOP_LOSS = 0.025  # 2.5%
+DIP_THRESHOLD = -0.05  # -5%
+SECOND_DIP = -0.03  # -3%
+
+COOLDOWN = 900  # 15 мин
+
+# =========================
+# TELEGRAM
+# =========================
+BOT_TOKEN = "8691332194:AAEFEy49VmViDx9PQ3mTPYPF4hTZLGX3CI0"
 CHAT_ID = "8039241406"
 
-SYMBOL = "BTCUSDC"
-SLEEP = 30
-
-client = BinanceClient(API_KEY, API_SECRET)
-
-# ===== TELEGRAM =====
 def send(msg):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
+    try:
+        requests.get(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+            params={"chat_id": CHAT_ID, "text": msg}
+        )
+    except:
+        pass
 
-# ===== RSI =====
-def rsi(prices, period=14):
-    gains, losses = [], []
-
-    for i in range(1, len(prices)):
-        diff = prices[i] - prices[i-1]
-        if diff >= 0:
-            gains.append(diff)
-        else:
-            losses.append(abs(diff))
-
-    avg_gain = sum(gains[-period:]) / period if gains else 0
-    avg_loss = sum(losses[-period:]) / period if losses else 0
-
-    if avg_loss == 0:
-        return 100
-
-    rs = avg_gain / avg_loss
-    return 100 - (100 / (1 + rs))
-
-# ===== EMA =====
-def ema(prices, period):
-    k = 2 / (period + 1)
-    e = prices[0]
-    for p in prices:
-        e = p * k + e * (1 - k)
-    return e
-
-# ===== ДАННЫЕ =====
-def get_prices():
-    url = f"https://api.binance.com/api/v3/klines?symbol={SYMBOL}&interval=1m&limit=100"
+# =========================
+# ПОЛУЧЕНИЕ ЦЕНЫ
+# =========================
+def get_price():
+    url = f"https://api.binance.com/api/v3/ticker/price?symbol={SYMBOL}"
     data = requests.get(url).json()
-    return [float(c[4]) for c in data]
+    return float(data["price"])
 
-# ===== БОТ =====
-def run():
-    print("🚀 BOT STARTED")
-    send("🚀 Bot started")
+# =========================
+# СОСТОЯНИЕ
+# =========================
+prices = deque(maxlen=50)
 
-    in_position = False
+position = None
+cooldown_until = 0
 
-    while True:
-        try:
-            prices = get_prices()
+# =========================
+# ВСПОМОГАТЕЛЬНОЕ
+# =========================
+def percent_change(old, new):
+    return (new - old) / old
 
-            price = prices[-1]
-            e50 = ema(prices, 50)
-            e200 = ema(prices, 200)
-            r = rsi(prices)
+def is_stable():
+    # последние 5 цен не делают новый минимум
+    if len(prices) < 6:
+        return False
+    last = list(prices)[-6:]
+    return min(last[:-1]) <= last[-1]
 
-            usdc = client.get_balance("USDC")
-            btc = client.get_balance("BTC")
+def bounce_detected():
+    if len(prices) < 3:
+        return False
+    return prices[-1] > prices[-2] > prices[-3]
 
-            print(f"PRICE: {price}")
-            print(f"EMA50: {e50} EMA200: {e200} RSI: {r}")
-            print(f"USDC: {usdc} BTC: {btc}")
+def btc_market_ok():
+    # простой фильтр рынка (1 час ~ 12 точек)
+    if len(prices) < 12:
+        return True
+    change = percent_change(prices[-12], prices[-1])
+    return change > -0.05
 
-            # BUY
-            if e50 > e200 and r < 35 and not in_position:
-                if usdc > 5:
-                    qty = (usdc * 0.95) / price
-                    client.order(SYMBOL, "BUY", round(qty, 5))
-                    send(f"🟢 BUY BTC {price}")
-                    in_position = True
+# =========================
+# ОСНОВНОЙ ЦИКЛ
+# =========================
+print("BOT STARTED")
 
-            # SELL
-            elif e50 < e200 and r > 65 and in_position:
-                if btc > 0.0001:
-                    client.order(SYMBOL, "SELL", round(btc, 5))
-                    send(f"🔴 SELL BTC {price}")
-                    in_position = False
+while True:
+    try:
+        price = get_price()
+        prices.append(price)
 
-            else:
-                print("HOLD")
+        print(f"Price: {price}")
 
-        except Exception as e:
-            print("ERROR:", e)
+        # =========================
+        # НЕТ ПОЗИЦИИ → ИЩЕМ ВХОД
+        # =========================
+        if position is None and time.time() > cooldown_until:
 
-        time.sleep(SLEEP)
+            if len(prices) > 10:
+                change = percent_change(prices[0], price)
 
-run()
+                if change <= DIP_THRESHOLD and btc_market_ok():
+
+                    if is_stable() or bounce_detected():
+
+                        position = {
+                            "entry": price,
+                            "amount": TRADE_AMOUNT * 0.5,
+                            "second_entry": None
+                        }
+
+                        send(f"🟢 BUY 1: {price}")
+                        print("BUY 1")
+
+        # =========================
+        # ЕСТЬ ПОЗИЦИЯ
+        # =========================
+        elif position:
+
+            avg_price = position["entry"]
+
+            # =========================
+            # ДОКУПКА
+            # =========================
+            if position["second_entry"] is None:
+                drop = percent_change(position["entry"], price)
+
+                if drop <= SECOND_DIP and (is_stable() or bounce_detected()):
+
+                    position["second_entry"] = price
+                    position["amount"] += TRADE_AMOUNT * 0.5
+
+                    avg_price = (position["entry"] + price) / 2
+
+                    send(f"🟡 BUY 2: {price}")
+                    print("BUY 2")
+
+            # =========================
+            # ПЕРЕСЧЁТ СРЕДНЕЙ
+            # =========================
+            if position["second_entry"]:
+                avg_price = (position["entry"] + position["second_entry"]) / 2
+
+            profit = percent_change(avg_price, price)
+
+            # =========================
+            # TAKE PROFIT
+            # =========================
+            if profit >= TAKE_PROFIT:
+                send(f"✅ SELL (TP): {price} | profit: {round(profit*100,2)}%")
+                print("SELL TP")
+
+                position = None
+                cooldown_until = time.time() + COOLDOWN
+
+            # =========================
+            # STOP LOSS
+            # =========================
+            elif profit <= -STOP_LOSS:
+                send(f"❌ SELL (SL): {price} | loss: {round(profit*100,2)}%")
+print("SELL SL")
+
+                position = None
+                cooldown_until = time.time() + COOLDOWN
+
+        time.sleep(10)
+
+    except Exception as e:
+        print("ERROR:", e)
+        time.sleep(5)
