@@ -7,13 +7,13 @@ from collections import deque
 # =========================
 SYMBOL = "BTCUSDT"
 
-TRADE_AMOUNT = 100  # виртуальные USDT
-TAKE_PROFIT = 0.025  # 2.5%
-STOP_LOSS = 0.025  # 2.5%
-DIP_THRESHOLD = -0.05  # -5%
-SECOND_DIP = -0.03  # -3%
+TRADE_AMOUNT = 100
+TAKE_PROFIT = 0.025
+STOP_LOSS = 0.025
+DIP_THRESHOLD = -0.05
+SECOND_DIP = -0.03
 
-COOLDOWN = 900  # 15 мин
+COOLDOWN = 900
 
 # =========================
 # TELEGRAM
@@ -31,15 +31,14 @@ def send(msg):
         pass
 
 # =========================
-# ПОЛУЧЕНИЕ ЦЕНЫ
+# PRICE
 # =========================
 def get_price():
     url = f"https://api.binance.com/api/v3/ticker/price?symbol={SYMBOL}"
-    data = requests.get(url).json()
-    return float(data["price"])
+    return float(requests.get(url).json()["price"])
 
 # =========================
-# СОСТОЯНИЕ
+# STATE
 # =========================
 prices = deque(maxlen=50)
 
@@ -47,13 +46,12 @@ position = None
 cooldown_until = 0
 
 # =========================
-# ВСПОМОГАТЕЛЬНОЕ
+# HELPERS
 # =========================
 def percent_change(old, new):
     return (new - old) / old
 
 def is_stable():
-    # последние 5 цен не делают новый минимум
     if len(prices) < 6:
         return False
     last = list(prices)[-6:]
@@ -65,14 +63,13 @@ def bounce_detected():
     return prices[-1] > prices[-2] > prices[-3]
 
 def btc_market_ok():
-    # простой фильтр рынка (1 час ~ 12 точек)
     if len(prices) < 12:
         return True
     change = percent_change(prices[-12], prices[-1])
     return change > -0.05
 
 # =========================
-# ОСНОВНОЙ ЦИКЛ
+# MAIN LOOP
 # =========================
 print("BOT STARTED")
 
@@ -81,10 +78,10 @@ while True:
         price = get_price()
         prices.append(price)
 
-        print(f"Price: {price}")
+        print(f"PRICE: {price}")
 
         # =========================
-        # НЕТ ПОЗИЦИИ → ИЩЕМ ВХОД
+        # NO POSITION → ENTRY
         # =========================
         if position is None and time.time() > cooldown_until:
 
@@ -97,7 +94,6 @@ while True:
 
                         position = {
                             "entry": price,
-                            "amount": TRADE_AMOUNT * 0.5,
                             "second_entry": None
                         }
 
@@ -105,14 +101,14 @@ while True:
                         print("BUY 1")
 
         # =========================
-        # ЕСТЬ ПОЗИЦИЯ
+        # POSITION OPEN
         # =========================
         elif position:
 
             avg_price = position["entry"]
 
             # =========================
-            # ДОКУПКА
+            # SECOND BUY
             # =========================
             if position["second_entry"] is None:
                 drop = percent_change(position["entry"], price)
@@ -120,15 +116,13 @@ while True:
                 if drop <= SECOND_DIP and (is_stable() or bounce_detected()):
 
                     position["second_entry"] = price
-                    position["amount"] += TRADE_AMOUNT * 0.5
-
                     avg_price = (position["entry"] + price) / 2
 
                     send(f"🟡 BUY 2: {price}")
                     print("BUY 2")
 
             # =========================
-            # ПЕРЕСЧЁТ СРЕДНЕЙ
+            # AVG PRICE
             # =========================
             if position["second_entry"]:
                 avg_price = (position["entry"] + position["second_entry"]) / 2
@@ -139,7 +133,7 @@ while True:
             # TAKE PROFIT
             # =========================
             if profit >= TAKE_PROFIT:
-                send(f"✅ SELL (TP): {price} | profit: {round(profit*100,2)}%")
+                send(f"✅ SELL TP: {price} | {round(profit*100,2)}%")
                 print("SELL TP")
 
                 position = None
@@ -149,8 +143,8 @@ while True:
             # STOP LOSS
             # =========================
             elif profit <= -STOP_LOSS:
-                send(f"❌ SELL (SL): {price} | loss: {round(profit*100,2)}%")
-print("SELL SL")
+                send(f"❌ SELL SL: {price} | {round(profit*100,2)}%")
+                print("SELL SL")
 
                 position = None
                 cooldown_until = time.time() + COOLDOWN
