@@ -165,7 +165,6 @@ USDT: {usdt}
                 client.order_market_sell(
                     symbol=SYMBOL,
 
-> Sasha:
 quantity=round(position["qty"], 6)
                 )
 
