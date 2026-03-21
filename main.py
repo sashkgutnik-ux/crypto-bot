@@ -174,7 +174,7 @@ def trend_ok():
     if len(prices) < 20:
         return True
     avg = sum(list(prices)[-20:]) / 20
-return prices[-1] > avg
+    return prices[-1] > avg
 
 def market_safe():
     if len(prices) < 20:
