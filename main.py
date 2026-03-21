@@ -50,7 +50,7 @@ def percent_change(old, new):
     return (new - old) / old
 
 # =========================
-# P2P SCANNER
+# P2P SCANNER (FIXED)
 # =========================
 def get_binance_p2p():
     try:
@@ -60,18 +60,23 @@ def get_binance_p2p():
             "fiat": "EUR",
             "tradeType": "SELL",
             "page": 1,
-            "rows": 5
+            "rows": 10
         }
 
-        res = requests.post(url, json=data).json()
+        res = requests.post(url, json=data, timeout=5).json()
         offers = res.get("data", [])
 
-        prices = [float(o["adv"]["price"]) for o in offers]
+        prices = []
+        for o in offers:
+            try:
+                prices.append(float(o["adv"]["price"]))
+            except:
+                continue
 
         return min(prices) if prices else None
 
     except Exception as e:
-        print("BINANCE P2P ERROR:", e)
+        print("BINANCE ERROR:", e)
         return None
 
 
@@ -83,45 +88,49 @@ def get_bybit_p2p():
             "currencyId": "EUR",
             "side": "0",
             "page": 1,
-            "size": 5
+            "size": 10
         }
 
-        res = requests.post(url, json=data).json()
+        res = requests.post(url, json=data, timeout=5).json()
         offers = res.get("result", {}).get("items", [])
 
-        prices = [float(o["price"]) for o in offers]
+        prices = []
+        for o in offers:
+            try:
+                prices.append(float(o["price"]))
+            except:
+                continue
 
         return max(prices) if prices else None
 
     except Exception as e:
-        print("BYBIT P2P ERROR:", e)
+        print("BYBIT ERROR:", e)
         return None
 
 
 def check_p2p():
-    try:
-        binance_price = get_binance_p2p()
-        bybit_price = get_bybit_p2p()
+    binance_price = get_binance_p2p()
+    bybit_price = get_bybit_p2p()
 
-        if not binance_price or not bybit_price:
-            print("P2P NO DATA")
-            return
+    print("DEBUG:", binance_price, bybit_price)
 
-        spread = (binance_price - bybit_price) / bybit_price * 100
+    if binance_price is None or bybit_price is None:
+        print("P2P NO DATA")
+        return
 
-        print(f"P2P → Bybit: {bybit_price} | Binance: {binance_price} | Spread: {round(spread,2)}%")
+    spread = (binance_price - bybit_price) / bybit_price * 100
 
-        send(f"""
+    msg = f"""
 💰 P2P LIVE
 
 Bybit: {bybit_price}
 Binance: {binance_price}
 
 Spread: {round(spread,2)}%
-""")
+"""
 
-    except Exception as e:
-        print("P2P ERROR:", e)
+    print(msg)
+    send(msg)
 
 # =========================
 # STATE
@@ -171,7 +180,7 @@ while True:
         print(f"PRICE: {price}")
 
         # =========================
-        # P2P CHECK (каждые 10 сек)
+# P2P CHECK
         # =========================
         if time.time() - last_p2p_check > 10:
             check_p2p()
