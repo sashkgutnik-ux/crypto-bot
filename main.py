@@ -174,7 +174,7 @@ while True:
         # P2P CHECK (каждые 10 сек)
         # =========================
         if time.time() - last_p2p_check > 10:
-check_p2p()
+            check_p2p()
             last_p2p_check = time.time()
 
         # =========================
