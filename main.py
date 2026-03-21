@@ -81,31 +81,55 @@ def get_binance_p2p():
 
 
 def get_bybit_p2p():
-    try:
-        url = "https://api2.bybit.com/fiat/otc/item/online"
-        data = {
-            "tokenId": "USDT",
-            "currencyId": "EUR",
-            "side": "0",
-            "page": 1,
-            "size": 10
-        }
+    url = "https://api2.bybit.com/fiat/otc/item/online"
 
-        res = requests.post(url, json=data, timeout=5).json()
-        offers = res.get("result", {}).get("items", [])
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        "Accept": "application/json",
+        "Origin": "https://www.bybit.com",
+        "Referer": "https://www.bybit.com/",
+        "Connection": "keep-alive"
+    }
 
-        prices = []
-        for o in offers:
-            try:
-                prices.append(float(o["price"]))
-            except:
-                continue
+    data = {
+        "tokenId": "USDT",
+        "currencyId": "EUR",
+        "side": "0",
+        "page": 1,
+        "size": 10
+    }
 
-        return max(prices) if prices else None
+    for i in range(5):  # 5 попыток
+        try:
+            res = requests.post(
+                url,
+                json=data,
+                headers=headers,
+                timeout=15
+            ).json()
 
-    except Exception as e:
-        print("BYBIT ERROR:", e)
-        return None
+            offers = res.get("result", {}).get("items", [])
+
+            prices = []
+            for o in offers:
+                try:
+                    price = float(o["price"])
+                    rate = float(o["recentExecuteRate"])
+
+                    if rate >= 99:
+                        prices.append(price)
+
+                except:
+                    continue
+
+            if prices:
+                return max(prices)
+
+        except Exception as e:
+            print(f"BYBIT TRY {i+1} ERROR:", e)
+            time.sleep(2)
+
+    return None
 
 
 def check_p2p():
