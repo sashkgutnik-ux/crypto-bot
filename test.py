@@ -2,28 +2,31 @@ from playwright.sync_api import sync_playwright
 
 def get_bybit_price():
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True, args=["--no-sandbox"])
+        browser = p.chromium.launch(
+            headless=False,
+            args=["--no-sandbox"]
+        )
+
         page = browser.new_page()
 
         page.goto("https://www.bybit.com/fiat/trade/otc/buy/USDT/EUR", timeout=60000)
 
-        # ждем загрузку
-        page.wait_for_timeout(8000)
+        page.wait_for_selector("table", timeout=20000)
 
-        # берем реальные цены (по селектору)
-        elements = page.query_selector_all("span")
+        rows = page.query_selector_all("tr")
 
         prices = []
 
-        for el in elements:
-            text = el.inner_text().replace(",", ".").strip()
+        for row in rows:
+            text = row.inner_text().replace(",", ".")
 
-            try:
-                val = float(text)
-                if 0.8 < val < 1.2:  # EUR фильтр
-                    prices.append(val)
-            except:
-                pass
+            for part in text.split():
+                try:
+                    val = float(part)
+                    if 0.8 < val < 1.2:
+                        prices.append(val)
+                except:
+                    pass
 
         browser.close()
 
