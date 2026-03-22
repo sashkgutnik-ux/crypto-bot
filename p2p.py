@@ -40,6 +40,6 @@ def get_bybit_p2p_price():
         return None
 
 
-if name == "__main__":
+if __name__ == "__main__":
     price = get_bybit_p2p_price()
     print("BYBIT:", price)
