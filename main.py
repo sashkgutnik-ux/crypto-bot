@@ -105,7 +105,7 @@ while True:
     print("BINANCE:", binance)
 
     if bybit and binance:
-    spread = ((binance - bybit) / bybit) * 100
+        spread = ((binance - bybit) / bybit) * 100
 
     print(f"BYBIT: {bybit}")
     print(f"BINANCE: {binance}")
