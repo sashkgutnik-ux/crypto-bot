@@ -39,8 +39,8 @@ def send(msg):
 # PROXY (BYBIT FIX)
 # =========================
 PROXY = {
-    "http": "http://ubibwgwk:7p0sy6uw77ga@31.59.20.176:6754",
-    "https": "http://ubibwgwk:7p0sy6uw77ga@31.59.20.176:6754"
+    "http": "http://ubibwgwk:7p0sy6uw77ga@191.96.254.138",
+    "https": "http://ubibwgwk:7p0sy6uw77ga@191.96.254.138"
 }
 
 # =========================
