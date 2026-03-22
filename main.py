@@ -4,12 +4,10 @@ from collections import deque
 from binance.client import Client
 
 # =========================
-# PROXY (ТВОЙ)
+# PROXY (FIXED)
 # =========================
-PROXY = {
-    "http": "http://ORSn3J:GWSWrc@45.157.123.217:8000",
-    "https": "http://ORSn3J:GWSWrc@45.157.123.217:8000"
-}
+PROXY_URL = "http://45.157.123.217:8000"
+PROXY_AUTH = ("ORSn3J", "GWSWrc")
 
 # =========================
 # BINANCE TESTNET
@@ -69,7 +67,6 @@ def get_binance_p2p():
         offers = res.get("data", [])
 
         prices = []
-
         for o in offers:
             adv = o["adv"]
             advertiser = o["advertiser"]
@@ -84,7 +81,7 @@ def get_binance_p2p():
         return None
 
 # =========================
-# BYBIT P2P (через прокси)
+# BYBIT P2P (через proxy FIX)
 # =========================
 def get_bybit_p2p():
     try:
@@ -98,11 +95,20 @@ def get_bybit_p2p():
             "size": 5
         }
 
-        res = requests.post(url, json=data, proxies=PROXY, timeout=10).json()
+        res = requests.post(
+            url,
+            json=data,
+            proxies={
+                "http": PROXY_URL,
+                "https": PROXY_URL
+            },
+            auth=PROXY_AUTH,
+            timeout=10
+        ).json()
+
         offers = res.get("result", {}).get("items", [])
 
         prices = []
-
         for o in offers:
             if float(o["recentExecuteRate"]) >= 99:
                 prices.append(float(o["price"]))
@@ -158,7 +164,6 @@ while True:
 
         print(f"PRICE: {price}")
 
-        # P2P каждые 10 сек
         check_p2p()
 
         time.sleep(10)
