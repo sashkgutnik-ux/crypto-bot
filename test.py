@@ -2,28 +2,32 @@ from playwright.sync_api import sync_playwright
 
 def get_bybit_price():
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(headless=True, args=["--no-sandbox"])
         page = browser.new_page()
 
-        page.goto("https://www.bybit.com/fiat/trade/otc/buy/USDT/EUR")
+        page.goto("https://www.bybit.com/fiat/trade/otc/buy/USDT/EUR", timeout=60000)
 
-        page.wait_for_timeout(5000)
+        # ждем загрузку
+        page.wait_for_timeout(8000)
 
-        prices = page.locator("div").all_text_contents()
+        # берем реальные цены (по селектору)
+        elements = page.query_selector_all("span")
 
-        clean = []
+        prices = []
 
-        for p in prices:
+        for el in elements:
+            text = el.inner_text().replace(",", ".").strip()
+
             try:
-                val = float(p.replace(",", "."))
-                if 0.8 < val < 1.2:  # фильтр USDT EUR
-                    clean.append(val)
+                val = float(text)
+                if 0.8 < val < 1.2:  # EUR фильтр
+                    prices.append(val)
             except:
                 pass
 
         browser.close()
 
-        return min(clean) if clean else None
+        return min(prices) if prices else None
 
 
 print("BYBIT:", get_bybit_price())
