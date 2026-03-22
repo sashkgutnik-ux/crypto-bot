@@ -70,36 +70,51 @@ def get_binance_p2p():
 # BYBIT P2P
 # =========================
 def get_bybit_p2p():
-    try:
-        url = "https://api2.bybit.com/fiat/otc/item/online"
+    url = "https://api2.bybit.com/fiat/otc/item/online"
 
-        data = {
-            "tokenId": "USDT",
-            "currencyId": "EUR",
-            "side": "0",
-            "page": 1,
-            "size": 5
-        }
+    data = {
+        "tokenId": "USDT",
+        "currencyId": "EUR",
+        "side": "0",
+        "page": 1,
+        "size": 5
+    }
 
-        res = requests.post(
-            url,
-            json=data,
-            proxies=PROXY,
-            timeout=10
-        ).json()
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Origin": "https://www.bybit.com",
+        "Referer": "https://www.bybit.com/"
+    }
 
-        offers = res.get("result", {}).get("items", [])
+    proxies = {
+        "http": "http://ORSn3J:GWSWrc@45.157.123.217:8000",
+        "https": "http://ORSn3J:GWSWrc@45.157.123.217:8000"
+    }
 
-        prices = []
-        for o in offers:
-            if float(o["recentExecuteRate"]) >= 99:
-                prices.append(float(o["price"]))
+    for _ in range(3):  # retry 3 раза
+        try:
+            res = requests.post(
+                url,
+                json=data,
+                headers=headers,
+                proxies=proxies,
+                timeout=20
+            ).json()
 
-        return max(prices) if prices else None
+            offers = res.get("result", {}).get("items", [])
 
-    except Exception as e:
-        print("BYBIT ERROR:", e)
-        return None
+            prices = []
+            for o in offers:
+                if float(o["recentExecuteRate"]) >= 99:
+                    prices.append(float(o["price"]))
+
+            if prices:
+                return max(prices)
+
+        except Exception as e:
+            print("BYBIT RETRY ERROR:", e)
+
+    return None
 
 # =========================
 # MAIN LOOP
