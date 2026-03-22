@@ -75,9 +75,9 @@ def get_bybit_p2p():
     data = {
         "tokenId": "USDT",
         "currencyId": "EUR",
-        "side": "0",
+        "side": "1",
         "page": 1,
-        "size": 5
+        "size": 20
     }
 
     headers = {
@@ -105,7 +105,7 @@ def get_bybit_p2p():
 
             prices = []
             for o in offers:
-                if float(o["recentExecuteRate"]) >= 99:
+                if float(o["recentExecuteRate"]) >= 95:
                     prices.append(float(o["price"]))
 
             if prices:
