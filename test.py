@@ -2,7 +2,7 @@ from playwright.sync_api import sync_playwright
 
 def get_bybit_price():
     with sync_playwright() as p:
-        browser = p.chromium.launch(
+        browser = p.chromium.launch(headless=True)
             headless=False,
             args=["--no-sandbox"]
         )
