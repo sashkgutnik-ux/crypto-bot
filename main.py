@@ -21,25 +21,28 @@ def get_bybit_price():
     payload = {
         "tokenId": "USDT",
         "currencyId": "EUR",
-        "side": "1",  # BUY
+        "side": "1",
         "size": "10",
         "page": "1",
-
-        # 💳 ТВОИ ФИЛЬТРЫ
         "payment": ["14", "62", "75"],  # Revolut, N26, Wise
-
-        # 💰 СУММА КАК У ТЕБЯ
-        "amount": "250"
     }
 
     try:
         r = requests.post(url, json=payload, headers=headers, timeout=10)
         data = r.json()
 
-        items = data["result"]["items"]
-        prices = [float(x["price"]) for x in items]
+        valid_prices = []
 
-        return min(prices)
+        for item in data["result"]["items"]:
+            min_limit = float(item["minAmount"])  # минималка
+            max_limit = float(item["maxAmount"])
+
+            # 🔥 ФИЛЬТР 250€
+            if min_limit <= 250 <= max_limit:
+                price = float(item["price"])
+                valid_prices.append(price)
+
+        return min(valid_prices) if valid_prices else None
 
     except Exception as e:
         print("BYBIT ERROR:", e)
@@ -102,15 +105,19 @@ while True:
     print("BINANCE:", binance)
 
     if bybit and binance:
-        spread = ((binance - bybit) / bybit) * 100
+    spread = ((binance - bybit) / bybit) * 100
 
+    print(f"BYBIT: {bybit}")
+    print(f"BINANCE: {binance}")
+    print(f"SPREAD: {round(spread, 2)}%")
+
+    # 🔥 ФИЛЬТР
+    if spread >= 0.6:
         message = (
+            f"🚀 SIGNAL\n\n"
             f"BYBIT: {bybit}\n"
             f"BINANCE: {binance}\n"
             f"SPREAD: {round(spread, 2)}%"
         )
 
-        print(message)
         send_telegram(message)
-
-    time.sleep(15)
