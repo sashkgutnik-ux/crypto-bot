@@ -1,15 +1,15 @@
 import requests
 import time
 
-# 🔐 ВСТАВЬ СВОЁ
 BOT_TOKEN = "8691332194:AAEFEy49VmViDx9PQ3mTPYPF4hTZLGX3CI0"
 CHAT_ID = "8039241406"
 
 last_ping = 0
+signal_active = False  # защита от спама
 
 
 # =========================
-# 📊 BYBIT P2P
+# 📊 BYBIT
 # =========================
 def get_bybit_price():
     url = "https://api2.bybit.com/fiat/otc/item/online"
@@ -33,18 +33,16 @@ def get_bybit_price():
         r = requests.post(url, json=payload, headers=headers, timeout=10)
         data = r.json()
 
-        valid_prices = []
+        prices = []
 
         for item in data["result"]["items"]:
             min_limit = float(item["minAmount"])
             max_limit = float(item["maxAmount"])
 
-            # 💰 фильтр 250€
             if min_limit <= 250 <= max_limit:
-                price = float(item["price"])
-                valid_prices.append(price)
+                prices.append(float(item["price"]))
 
-        return min(valid_prices) if valid_prices else None
+        return min(prices) if prices else None
 
     except Exception as e:
         print("BYBIT ERROR:", e)
@@ -52,7 +50,7 @@ def get_bybit_price():
 
 
 # =========================
-# 📊 BINANCE P2P
+# 📊 BINANCE
 # =========================
 def get_binance_price():
     url = "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
@@ -72,7 +70,7 @@ def get_binance_price():
         data = r.json()
 
         prices = [float(x["adv"]["price"]) for x in data["data"]]
-        return min(prices)
+        return min(prices) if prices else None
 
     except Exception as e:
         print("BINANCE ERROR:", e)
@@ -84,43 +82,46 @@ def get_binance_price():
 # =========================
 def send_telegram(text):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    data = {
-        "chat_id": CHAT_ID,
-        "text": text
-    }
-    requests.post(url, data=data)
+    requests.post(url, data={"chat_id": CHAT_ID, "text": text})
 
 
 # =========================
-# 🚀 MAIN LOOP
+# 🚀 MAIN
 # =========================
 print("🚀 BOT STARTED")
 
 while True:
-    bybit = get_bybit_price()
-    binance = get_binance_price()
+    try:
+        bybit = get_bybit_price()
+        binance = get_binance_price()
 
-    print("BYBIT:", bybit)
-    print("BINANCE:", binance)
+        print("BYBIT:", bybit)
+        print("BINANCE:", binance)
 
-    if bybit and binance:
-        spread = ((binance - bybit) / bybit) * 100
+        if bybit and binance:
+            spread = binance - bybit  # 💡 просто разница
 
-        print(f"SPREAD: {round(spread, 2)}%")
+            print(f"DELTA: {round(spread, 4)}")
 
-        # 🔥 сигнал только от 0.6%
-        if spread >= 0.6:
-            message = (
-                f"🚀 SIGNAL\n\n"
-                f"BYBIT: {bybit}\n"
-                f"BINANCE: {binance}\n"
-                f"SPREAD: {round(spread, 2)}%"
-            )
-            send_telegram(message)
+            # 🔥 СИГНАЛ
+            if spread >= 0.005:  # ~0.5%
+                if not signal_active:
+                    send_telegram(
+                        f"🚀 ПЕРЕКОС\n\n"
+                        f"BYBIT: {bybit}\n"
+                        f"BINANCE: {binance}\n"
+                        f"Δ: {round(spread, 4)}"
+                    )
+                    signal_active = True
+            else:
+                signal_active = False  # сброс
 
-    # ⏱ каждые 3 часа
-    if time.time() - last_ping > 10800:
-        send_telegram(f"✅ Бот жив\nBYBIT: {bybit}\nBINANCE: {binance}")
-        last_ping = time.time()
+        # ⏱ пинг каждые 3 часа
+        if time.time() - last_ping > 10800:
+            send_telegram(f"✅ Бот жив\nBYBIT: {bybit}\nBINANCE: {binance}")
+            last_ping = time.time()
+
+    except Exception as e:
+        print("ERROR:", e)
 
     time.sleep(15)
