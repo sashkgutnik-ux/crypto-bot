@@ -6,9 +6,9 @@ BOT_TOKEN = "8691332194:AAEFEy49VmViDx9PQ3mTPYPF4hTZLGX3CI0"
 CHAT_ID = "8039241406"
 
 AMOUNT = 250
-DELTA_THRESHOLD = 0.02  # ≈2-3% норм сигнал
+SPREAD_TRIGGER = 0.005  # ~0.5%
 
-signal_active = False
+last_signal = False
 last_ping = 0
 
 
@@ -16,12 +16,15 @@ last_ping = 0
 # 📩 TELEGRAM
 # =========================
 def send_telegram(text):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    requests.post(url, data={"chat_id": CHAT_ID, "text": text})
+    try:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        requests.post(url, data={"chat_id": CHAT_ID, "text": text})
+    except:
+        pass
 
 
 # =========================
-# 📊 BYBIT (ТОП-3)
+# 📊 BYBIT (BUY)
 # =========================
 def get_bybit_price():
     url = "https://api2.bybit.com/fiat/otc/item/online"
@@ -29,58 +32,10 @@ def get_bybit_price():
     payload = {
         "tokenId": "USDT",
         "currencyId": "EUR",
-        "side": "1",
+        "side": "1",  # BUY
         "size": "10",
         "page": "1",
-        "payment": ["14", "62", "75"],
-    }
-
-    for _ in range(3):  # 🔁 retry 3 раза
-        try:
-            r = requests.post(url, json=payload, timeout=20)  # увеличили timeout
-            data = r.json()
-
-            prices = []
-
-            for item in data["result"]["items"]:
-                price = float(item["price"])
-                min_limit = float(item["minAmount"])
-                max_limit = float(item["maxAmount"])
-                orders = float(item["recentOrderNum"])
-
-                if not (min_limit <= 250 <= max_limit):
-                    continue
-
-                if orders < 30:  # чуть мягче фильтр
-                    continue
-
-                prices.append(price)
-
-            if len(prices) >= 3:
-                prices.sort()
-                return sum(prices[:3]) / 3
-
-        except Exception as e:
-            print("BYBIT RETRY:", e)
-            time.sleep(3)
-
-    return None
-
-
-# =========================
-# 📊 BINANCE (ТОП-3)
-# =========================
-def get_binance_price():
-    url = "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
-
-    payload = {
-        "asset": "USDT",
-        "fiat": "EUR",
-        "tradeType": "BUY",
-        "transAmount": str(AMOUNT),
-        "page": 1,
-        "rows": 10,
-        "payTypes": ["REVOLUT", "N26", "WISE"]
+        "payment": ["14", "62", "75"]  # Revolut, N26, Wise
     }
 
     try:
@@ -89,20 +44,54 @@ def get_binance_price():
 
         prices = []
 
-        for ad in data["data"]:
-            price = float(ad["adv"]["price"])
-            orders = float(ad["advertiser"]["monthOrderCount"])
+        for item in data["result"]["items"]:
+            min_limit = float(item["minAmount"])
+            max_limit = float(item["maxAmount"])
 
-            if orders < 50:
-                continue
+            if min_limit <= AMOUNT <= max_limit:
+                price = float(item["price"])
+                prices.append(price)
 
-            prices.append(price)
+        return round(min(prices), 3) if prices else None
 
-        if len(prices) < 3:
-            return None
+    except Exception as e:
+        print("BYBIT ERROR:", e)
+        return None
 
-        prices.sort()
-        return sum(prices[:3]) / 3  # ТОП-3
+
+# =========================
+# 📊 BINANCE (SELL)
+# =========================
+def get_binance_price():
+    url = "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
+
+    payload = {
+        "asset": "USDT",
+        "fiat": "EUR",
+        "tradeType": "SELL",  # ❗ ВАЖНО
+        "transAmount": str(AMOUNT),
+        "page": 1,
+        "rows": 10,
+        "payTypes": ["REVOLUT", "N26", "WISE", "SEPA_INSTANT"]
+    }
+
+    try:
+        r = requests.post(url, json=payload, timeout=10)
+        data = r.json()
+
+        valid_prices = []
+
+        for item in data["data"]:
+            adv = item["adv"]
+
+            min_limit = float(adv["minSingleTransAmount"])
+            max_limit = float(adv["maxSingleTransAmount"])
+
+            if min_limit <= AMOUNT <= max_limit:
+                price = float(adv["price"])
+                valid_prices.append(price)
+
+        return round(max(valid_prices), 3) if valid_prices else None  # продаем дороже
 
     except Exception as e:
         print("BINANCE ERROR:", e)
@@ -124,28 +113,31 @@ while True:
 
         if bybit and binance:
             delta = binance - bybit
+            spread = delta / bybit
 
             print(f"DELTA: {round(delta, 4)}")
+            print(f"SPREAD: {round(spread*100, 2)}%")
 
             # 🔥 сигнал
-            if delta >= DELTA_THRESHOLD:
-                if not signal_active:
+            if spread >= SPREAD_TRIGGER:
+                if not last_signal:
                     send_telegram(
                         f"🚀 СИГНАЛ\n\n"
-                        f"BYBIT: {round(bybit, 4)}\n"
-                        f"BINANCE: {round(binance, 4)}\n"
-                        f"DELTA: {round(delta, 4)} €"
+                        f"Купить BYBIT: {bybit}\n"
+                        f"Продать BINANCE: {binance}\n"
+                        f"Δ: {round(delta,4)}\n"
+                        f"{round(spread*100,2)}%"
                     )
-                    signal_active = True
+                    last_signal = True
             else:
-                signal_active = False
+                last_signal = False
 
         else:
             print("Нет данных")
 
-        # ⏱ живой сигнал раз в 3 часа
+        # ⏱ жив
         if time.time() - last_ping > 10800:
-            send_telegram("✅ Бот работает")
+            send_telegram("✅ Бот жив")
             last_ping = time.time()
 
     except Exception as e:
