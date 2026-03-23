@@ -32,39 +32,39 @@ def get_bybit_price():
         "side": "1",
         "size": "10",
         "page": "1",
-        "payment": ["14", "62", "75"],  # Revolut, N26, Wise
+        "payment": ["14", "62", "75"],
     }
 
-    try:
-        r = requests.post(url, json=payload, timeout=10)
-        data = r.json()
+    for _ in range(3):  # 🔁 retry 3 раза
+        try:
+            r = requests.post(url, json=payload, timeout=20)  # увеличили timeout
+            data = r.json()
 
-        prices = []
+            prices = []
 
-        for item in data["result"]["items"]:
-            price = float(item["price"])
-            min_limit = float(item["minAmount"])
-            max_limit = float(item["maxAmount"])
-            orders = float(item["recentOrderNum"])
+            for item in data["result"]["items"]:
+                price = float(item["price"])
+                min_limit = float(item["minAmount"])
+                max_limit = float(item["maxAmount"])
+                orders = float(item["recentOrderNum"])
 
-            # 🔥 фильтры
-            if not (min_limit <= AMOUNT <= max_limit):
-                continue
+                if not (min_limit <= 250 <= max_limit):
+                    continue
 
-            if orders < 50:
-                continue
+                if orders < 30:  # чуть мягче фильтр
+                    continue
 
-            prices.append(price)
+                prices.append(price)
 
-        if len(prices) < 3:
-            return None
+            if len(prices) >= 3:
+                prices.sort()
+                return sum(prices[:3]) / 3
 
-        prices.sort()
-        return sum(prices[:3]) / 3  # ТОП-3
+        except Exception as e:
+            print("BYBIT RETRY:", e)
+            time.sleep(3)
 
-    except Exception as e:
-        print("BYBIT ERROR:", e)
-        return None
+    return None
 
 
 # =========================
