@@ -1,24 +1,30 @@
 import requests
 import time
 
+# 🔐 ВСТАВЬ СВОЁ
 BOT_TOKEN = "8691332194:AAEFEy49VmViDx9PQ3mTPYPF4hTZLGX3CI0"
 CHAT_ID = "8039241406"
 
+AMOUNT = 250
+DELTA_THRESHOLD = 0.02  # ≈2-3% норм сигнал
+
+signal_active = False
 last_ping = 0
-signal_active = False  # защита от спама
 
 
 # =========================
-# 📊 BYBIT
+# 📩 TELEGRAM
+# =========================
+def send_telegram(text):
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    requests.post(url, data={"chat_id": CHAT_ID, "text": text})
+
+
+# =========================
+# 📊 BYBIT (ТОП-3)
 # =========================
 def get_bybit_price():
     url = "https://api2.bybit.com/fiat/otc/item/online"
-
-    headers = {
-        "user-agent": "Mozilla/5.0",
-        "origin": "https://www.bybit.com",
-        "referer": "https://www.bybit.com/",
-    }
 
     payload = {
         "tokenId": "USDT",
@@ -30,19 +36,31 @@ def get_bybit_price():
     }
 
     try:
-        r = requests.post(url, json=payload, headers=headers, timeout=10)
+        r = requests.post(url, json=payload, timeout=10)
         data = r.json()
 
         prices = []
 
         for item in data["result"]["items"]:
+            price = float(item["price"])
             min_limit = float(item["minAmount"])
             max_limit = float(item["maxAmount"])
+            orders = float(item["recentOrderNum"])
 
-            if min_limit <= 250 <= max_limit:
-                prices.append(float(item["price"]))
+            # 🔥 фильтры
+            if not (min_limit <= AMOUNT <= max_limit):
+                continue
 
-        return min(prices) if prices else None
+            if orders < 50:
+                continue
+
+            prices.append(price)
+
+        if len(prices) < 3:
+            return None
+
+        prices.sort()
+        return sum(prices[:3]) / 3  # ТОП-3
 
     except Exception as e:
         print("BYBIT ERROR:", e)
@@ -50,7 +68,7 @@ def get_bybit_price():
 
 
 # =========================
-# 📊 BINANCE
+# 📊 BINANCE (ТОП-3)
 # =========================
 def get_binance_price():
     url = "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
@@ -59,7 +77,7 @@ def get_binance_price():
         "asset": "USDT",
         "fiat": "EUR",
         "tradeType": "BUY",
-        "transAmount": "250",
+        "transAmount": str(AMOUNT),
         "page": 1,
         "rows": 10,
         "payTypes": ["REVOLUT", "N26", "WISE"]
@@ -69,20 +87,26 @@ def get_binance_price():
         r = requests.post(url, json=payload, timeout=10)
         data = r.json()
 
-        prices = [float(x["adv"]["price"]) for x in data["data"]]
-        return min(prices) if prices else None
+        prices = []
+
+        for ad in data["data"]:
+            price = float(ad["adv"]["price"])
+            orders = float(ad["advertiser"]["monthOrderCount"])
+
+            if orders < 50:
+                continue
+
+            prices.append(price)
+
+        if len(prices) < 3:
+            return None
+
+        prices.sort()
+        return sum(prices[:3]) / 3  # ТОП-3
 
     except Exception as e:
         print("BINANCE ERROR:", e)
         return None
-
-
-# =========================
-# 📩 TELEGRAM
-# =========================
-def send_telegram(text):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    requests.post(url, data={"chat_id": CHAT_ID, "text": text})
 
 
 # =========================
@@ -99,29 +123,32 @@ while True:
         print("BINANCE:", binance)
 
         if bybit and binance:
-            spread = binance - bybit  # 💡 просто разница
+            delta = binance - bybit
 
-            print(f"DELTA: {round(spread, 4)}")
+            print(f"DELTA: {round(delta, 4)}")
 
-            # 🔥 СИГНАЛ
-            if spread >= 0.005:  # ~0.5%
+            # 🔥 сигнал
+            if delta >= DELTA_THRESHOLD:
                 if not signal_active:
                     send_telegram(
-                        f"🚀 ПЕРЕКОС\n\n"
-                        f"BYBIT: {bybit}\n"
-                        f"BINANCE: {binance}\n"
-                        f"Δ: {round(spread, 4)}"
+                        f"🚀 СИГНАЛ\n\n"
+                        f"BYBIT: {round(bybit, 4)}\n"
+                        f"BINANCE: {round(binance, 4)}\n"
+                        f"DELTA: {round(delta, 4)} €"
                     )
                     signal_active = True
             else:
-                signal_active = False  # сброс
+                signal_active = False
 
-        # ⏱ пинг каждые 3 часа
+        else:
+            print("Нет данных")
+
+        # ⏱ живой сигнал раз в 3 часа
         if time.time() - last_ping > 10800:
-            send_telegram(f"✅ Бот жив\nBYBIT: {bybit}\nBINANCE: {binance}")
+            send_telegram("✅ Бот работает")
             last_ping = time.time()
 
     except Exception as e:
         print("ERROR:", e)
 
-    time.sleep(15)
+    time.sleep(20)
