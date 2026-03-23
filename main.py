@@ -32,31 +32,33 @@ def get_bybit_price():
     payload = {
         "tokenId": "USDT",
         "currencyId": "EUR",
-        "side": "1",  # BUY
+        "side": "1",
         "size": "10",
         "page": "1",
-        "payment": ["14", "62", "75"]  # Revolut, N26, Wise
+        "payment": ["14", "62", "75"]
     }
 
-    try:
-        r = requests.post(url, json=payload, timeout=10)
-        data = r.json()
+    for _ in range(3):  # 🔁 retry
+        try:
+            r = requests.post(url, json=payload, timeout=15)
+            data = r.json()
 
-        prices = []
+            prices = []
 
-        for item in data["result"]["items"]:
-            min_limit = float(item["minAmount"])
-            max_limit = float(item["maxAmount"])
+            for item in data["result"]["items"]:
+                min_limit = float(item["minAmount"])
+                max_limit = float(item["maxAmount"])
 
-            if min_limit <= AMOUNT <= max_limit:
-                price = float(item["price"])
-                prices.append(price)
+                if min_limit <= 250 <= max_limit:
+                    prices.append(float(item["price"]))
 
-        return round(min(prices), 3) if prices else None
+            if prices:
+                return round(min(prices), 3)
 
-    except Exception as e:
-        print("BYBIT ERROR:", e)
-        return None
+        except:
+            time.sleep(2)
+
+    return None
 
 
 # =========================
@@ -143,4 +145,4 @@ while True:
     except Exception as e:
         print("ERROR:", e)
 
-    time.sleep(20)
+    time.sleep(30)
