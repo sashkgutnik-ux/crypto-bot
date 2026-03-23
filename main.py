@@ -6,29 +6,30 @@ from playwright.sync_api import sync_playwright
 AMOUNT = 250
 PAYMENTS = ["Revolut", "N26", "Wise", "SEPA"]
 
-TELEGRAM_TOKEN = "8691332194:AAEFEy49VmViDx9PQ3mTPYPF4hTZLGX3CI0"
-CHAT_ID = "8039241406"
+TELEGRAM_TOKEN = "ТВОЙ_ТОКЕН"
+CHAT_ID = "ТВОЙ_CHAT_ID"
 
-SPREAD_THRESHOLD = 0.6  # %
+SPREAD_THRESHOLD = 0.6
 
-last_signal_sent = False  # анти-спам
+last_signal_sent = False
 
 
 # ===== TELEGRAM =====
 def send_telegram(text):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    requests.post(url, data={"chat_id": CHAT_ID, "text": text})
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        requests.post(url, data={"chat_id": CHAT_ID, "text": text})
+    except:
+        pass
 
 
 # ===== ФИЛЬТР =====
 def is_valid_offer(text):
     text = text.lower()
 
-    # платежки
     if not any(p.lower() in text for p in PAYMENTS):
         return False
 
-    # лимиты
     try:
         parts = text.replace(",", "").split()
         numbers = [float(p) for p in parts if p.replace('.', '', 1).isdigit()]
@@ -47,11 +48,22 @@ def is_valid_offer(text):
 # ===== ПАРСИНГ =====
 def get_price(url):
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True, args=["--no-sandbox"])
-        page = browser.new_page()
+        browser = p.chromium.launch(
+            headless=True,
+            args=[
+                "--no-sandbox",
+                "--disable-blink-features=AutomationControlled"
+            ]
+        )
 
-        page.goto(url, timeout=60000)
-        page.wait_for_timeout(5000)
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36"
+        )
+
+        page = context.new_page()
+
+        page.goto(url, timeout=60000, wait_until="domcontentloaded")
+        page.wait_for_timeout(6000)
 
         rows = page.query_selector_all("tr")
 
@@ -72,18 +84,32 @@ def get_price(url):
         return None
 
 
+# ===== RETRY =====
+def safe_get_price(url):
+    for _ in range(3):
+        try:
+            price = get_price(url)
+            if price:
+                return price
+        except:
+            pass
+        time.sleep(5)
+    return None
+
+
 # ===== URL =====
 BYBIT_URL = "https://www.bybit.com/fiat/trade/otc/buy/USDT/EUR"
 BINANCE_URL = "https://p2p.binance.com/en/trade/buy/USDT?fiat=EUR"
 
 
-# ===== MAIN LOOP =====
+# ===== MAIN =====
 print("BOT STARTED")
 
 while True:
     try:
-        bybit = get_price(BYBIT_URL)
-        binance = get_price(BINANCE_URL)
+        bybit = safe_get_price(BYBIT_URL)
+        time.sleep(3)  # пауза между биржами
+        binance = safe_get_price(BINANCE_URL)
 
         if bybit and binance:
             spread = ((binance - bybit) / bybit) * 100
@@ -92,7 +118,6 @@ while True:
             print(f"BINANCE: {binance}")
             print(f"SPREAD: {spread:.2f}%")
 
-            # ===== АНТИ-СПАМ ЛОГИКА =====
             if spread >= SPREAD_THRESHOLD:
                 if not last_signal_sent:
                     send_telegram(f"""
@@ -104,13 +129,12 @@ SPREAD: {spread:.2f}%
 """)
                     last_signal_sent = True
             else:
-                # сбрасываем, чтобы следующий сигнал снова пришёл
                 last_signal_sent = False
 
         else:
-            print("Нет данных")
+            print("Нет данных (возможно блок или нет офферов)")
 
     except Exception as e:
         print("ERROR:", e)
 
-    time.sleep(15)
+    time.sleep(30)  # увеличили чтобы не банило
