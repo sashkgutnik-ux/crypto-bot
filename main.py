@@ -1,129 +1,126 @@
-import time
 import requests
-from playwright.sync_api import sync_playwright
+import time
 
-# ===== НАСТРОЙКИ =====
-TELEGRAM_TOKEN = "8691332194:AAEFEy49VmViDx9PQ3mTPYPF4hTZLGX3CI0"
+# 🔐 ВСТАВЬ СВОЁ
+BOT_TOKEN = "8691332194:AAEFEy49VmViDx9PQ3mTPYPF4hTZLGX3CI0"
 CHAT_ID = "8039241406"
 
-SPREAD_TRIGGER = 0.01  # просто сигнал перекоса
-last_signal_time = 0
+last_ping = 0
 
 
-# ===== TELEGRAM =====
-def send_telegram(text):
+# =========================
+# 📊 BYBIT P2P
+# =========================
+def get_bybit_price():
+    url = "https://api2.bybit.com/fiat/otc/item/online"
+
+    headers = {
+        "user-agent": "Mozilla/5.0",
+        "origin": "https://www.bybit.com",
+        "referer": "https://www.bybit.com/",
+    }
+
+    payload = {
+        "tokenId": "USDT",
+        "currencyId": "EUR",
+        "side": "1",
+        "size": "10",
+        "page": "1",
+        "payment": ["14", "62", "75"],  # Revolut, N26, Wise
+    }
+
     try:
-        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-        requests.post(url, data={"chat_id": CHAT_ID, "text": text})
-    except:
-        pass
+        r = requests.post(url, json=payload, headers=headers, timeout=10)
+        data = r.json()
 
+        valid_prices = []
 
-# ===== ЧИСТКА ЦЕН =====
-def clean_prices(prices):
-    if len(prices) < 3:
-        return None
+        for item in data["result"]["items"]:
+            min_limit = float(item["minAmount"])
+            max_limit = float(item["maxAmount"])
 
-    prices = sorted(prices)
+            # 💰 фильтр 250€
+            if min_limit <= 250 <= max_limit:
+                price = float(item["price"])
+                valid_prices.append(price)
 
-    # убираем крайние выбросы
-    if len(prices) > 6:
-        prices = prices[1:-1]
-
-    return sum(prices[:5]) / min(len(prices), 5)
-
-
-# ===== ПАРСИНГ =====
-def get_price(url):
-    with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=True,
-            args=["--no-sandbox"]
-        )
-
-        page = browser.new_page()
-
-        try:
-            page.goto(url, timeout=60000)
-            page.wait_for_selector("body", timeout=15000)
-            page.wait_for_timeout(5000)
-        except:
-            browser.close()
-            return None
-
-        rows = page.query_selector_all("div")
-
-        prices = []
-
-        for row in rows[:30]:
-            try:
-                text = row.inner_text().replace(",", ".")
-
-                for part in text.split():
-                    try:
-                        val = float(part)
-                        if 0.5 < val < 2:
-                            prices.append(val)
-                            break
-                    except:
-                        continue
-            except:
-                continue
-
-        browser.close()
-
-        if prices:
-            avg = clean_prices(prices)
-
-            if avg:
-                return avg
-
-            # fallback если мало данных
-            return sum(prices[:3]) / len(prices[:3])
-
-        return None
-
-
-# ===== URL =====
-BYBIT_URL = "https://www.bybit.com/fiat/trade/otc/buy/USDT/EUR"
-BINANCE_URL = "https://p2p.binance.com/en/trade/buy/USDT?fiat=EUR"
-
-
-# ===== MAIN =====
-print("BOT STARTED")
-
-while True:
-    try:
-        bybit = get_price(BYBIT_URL)
-        time.sleep(2)
-        binance = get_price(BINANCE_URL)
-
-        if bybit and binance:
-            spread = abs(binance - bybit)
-
-            print(f"BYBIT: {bybit}")
-            print(f"BINANCE: {binance}")
-            print(f"DELTA: {spread}")
-
-            now = time.time()
-
-            # сигнал не чаще чем раз в 2 минуты
-            if spread >= SPREAD_TRIGGER:
-                if now - last_signal_time > 120:
-                    send_telegram(f"""
-⚡ ПЕРЕКОС
-
-Bybit ≈ {bybit}
-Binance ≈ {binance}
-
-Δ {spread}
-""")
-                    last_signal_time = now
-
-        else:
-            print("Нет данных")
+        return min(valid_prices) if valid_prices else None
 
     except Exception as e:
-        print("ERROR:", e)
+        print("BYBIT ERROR:", e)
+        return None
 
-    time.sleep(20)
+
+# =========================
+# 📊 BINANCE P2P
+# =========================
+def get_binance_price():
+    url = "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
+
+    payload = {
+        "asset": "USDT",
+        "fiat": "EUR",
+        "tradeType": "BUY",
+        "transAmount": "250",
+        "page": 1,
+        "rows": 10,
+        "payTypes": ["REVOLUT", "N26", "WISE"]
+    }
+
+    try:
+        r = requests.post(url, json=payload, timeout=10)
+        data = r.json()
+
+        prices = [float(x["adv"]["price"]) for x in data["data"]]
+        return min(prices)
+
+    except Exception as e:
+        print("BINANCE ERROR:", e)
+        return None
+
+
+# =========================
+# 📩 TELEGRAM
+# =========================
+def send_telegram(text):
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    data = {
+        "chat_id": CHAT_ID,
+        "text": text
+    }
+    requests.post(url, data=data)
+
+
+# =========================
+# 🚀 MAIN LOOP
+# =========================
+print("🚀 BOT STARTED")
+
+while True:
+    bybit = get_bybit_price()
+    binance = get_binance_price()
+
+    print("BYBIT:", bybit)
+    print("BINANCE:", binance)
+
+    if bybit and binance:
+        spread = ((binance - bybit) / bybit) * 100
+
+        print(f"SPREAD: {round(spread, 2)}%")
+
+        # 🔥 сигнал только от 0.6%
+        if spread >= 0.6:
+            message = (
+                f"🚀 SIGNAL\n\n"
+                f"BYBIT: {bybit}\n"
+                f"BINANCE: {binance}\n"
+                f"SPREAD: {round(spread, 2)}%"
+            )
+            send_telegram(message)
+
+    # ⏱ каждые 3 часа
+    if time.time() - last_ping > 10800:
+        send_telegram(f"✅ Бот жив\nBYBIT: {bybit}\nBINANCE: {binance}")
+        last_ping = time.time()
+
+    time.sleep(15)
