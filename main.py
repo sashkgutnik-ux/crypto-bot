@@ -2,13 +2,15 @@ import time
 import requests
 from playwright.sync_api import sync_playwright
 
+# ===== НАСТРОЙКИ =====
 TELEGRAM_TOKEN = "8691332194:AAEFEy49VmViDx9PQ3mTPYPF4hTZLGX3CI0"
 CHAT_ID = "8039241406"
 
-SPREAD_TRIGGER = 0.01  # минимальный перекос
+SPREAD_TRIGGER = 0.01  # просто сигнал перекоса
 last_signal_time = 0
 
 
+# ===== TELEGRAM =====
 def send_telegram(text):
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -17,18 +19,21 @@ def send_telegram(text):
         pass
 
 
+# ===== ЧИСТКА ЦЕН =====
 def clean_prices(prices):
-    if len(prices) < 5:
+    if len(prices) < 3:
         return None
 
     prices = sorted(prices)
 
-    # убираем крайние (скам/мусор)
-    trimmed = prices[2:-2]
+    # убираем крайние выбросы
+    if len(prices) > 6:
+        prices = prices[1:-1]
 
-    return sum(trimmed) / len(trimmed)
+    return sum(prices[:5]) / min(len(prices), 5)
 
 
+# ===== ПАРСИНГ =====
 def get_price(url):
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -40,35 +45,51 @@ def get_price(url):
 
         try:
             page.goto(url, timeout=60000)
+            page.wait_for_selector("body", timeout=15000)
             page.wait_for_timeout(5000)
         except:
             browser.close()
             return None
 
-        rows = page.query_selector_all("tr")
+        rows = page.query_selector_all("div")
 
         prices = []
 
-        for row in rows[:20]:
-            text = row.inner_text().replace(",", ".")
+        for row in rows[:30]:
+            try:
+                text = row.inner_text().replace(",", ".")
 
-            for part in text.split():
-                try:
-                    val = float(part)
-                    if 0.5 < val < 2:
-                        prices.append(val)
-                        break
-                except:
-                    continue
+                for part in text.split():
+                    try:
+                        val = float(part)
+                        if 0.5 < val < 2:
+                            prices.append(val)
+                            break
+                    except:
+                        continue
+            except:
+                continue
 
         browser.close()
 
-        return clean_prices(prices)
+        if prices:
+            avg = clean_prices(prices)
+
+            if avg:
+                return avg
+
+            # fallback если мало данных
+            return sum(prices[:3]) / len(prices[:3])
+
+        return None
 
 
+# ===== URL =====
 BYBIT_URL = "https://www.bybit.com/fiat/trade/otc/buy/USDT/EUR"
 BINANCE_URL = "https://p2p.binance.com/en/trade/buy/USDT?fiat=EUR"
 
+
+# ===== MAIN =====
 print("BOT STARTED")
 
 while True:
@@ -86,6 +107,7 @@ while True:
 
             now = time.time()
 
+            # сигнал не чаще чем раз в 2 минуты
             if spread >= SPREAD_TRIGGER:
                 if now - last_signal_time > 120:
                     send_telegram(f"""
