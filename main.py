@@ -2,8 +2,8 @@ import time
 import requests
 from playwright.sync_api import sync_playwright
 
-TELEGRAM_TOKEN = "ТВОЙ_ТОКЕН"
-CHAT_ID = "ТВОЙ_CHAT_ID"
+TELEGRAM_TOKEN = "8691332194:AAEFEy49VmViDx9PQ3mTPYPF4hTZLGX3CI0"
+CHAT_ID = "8039241406"
 
 SPREAD_TRIGGER = 0.5  # минимальный перекос для сигнала
 
