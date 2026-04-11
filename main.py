@@ -5,9 +5,8 @@ import time
 BOT_TOKEN = "8691332194:AAEFEy49VmViDx9PQ3mTPYPF4hTZLGX3CI0"
 CHAT_ID = "8039241406"
 
-BASE_PRICE = 0.855  # 🔥 фикс покупка
+BASE_PRICE = 0.855
 AMOUNT = 250
-
 TRIGGER_PERCENT = 0.6
 
 last_signal = False
@@ -26,7 +25,7 @@ def send_telegram(text):
 
 
 # =========================
-# 📊 BINANCE SELL (ТОЛЬКО НУЖНЫЕ ПЛАТЕЖКИ)
+# 📊 BINANCE SELL (ФИКС)
 # =========================
 def get_binance_sell():
     url = "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
@@ -42,9 +41,9 @@ def get_binance_sell():
             "WISE",
             "N26",
             "SEPA_INSTANT",
-            "PAYSAFE",   # иногда это Paysera
-            "SEPA",      # обычный банковский перевод ЕС
-            "BUNQ"
+            "SEPA",
+            "BUNQ",
+            "PAYSAFE"
         ]
     }
 
@@ -56,14 +55,29 @@ def get_binance_sell():
 
         for item in data["data"]:
             adv = item["adv"]
+            advertiser = item["advertiser"]
 
             min_limit = float(adv["minSingleTransAmount"])
             max_limit = float(adv["maxSingleTransAmount"])
+            orders = float(advertiser["monthOrderCount"])
 
-            if min_limit <= AMOUNT <= max_limit:
-                prices.append(float(adv["price"]))
+            # 🔥 фильтры
+            if not (min_limit <= AMOUNT <= max_limit):
+                continue
 
-        return round(max(prices), 3) if prices else None
+            if orders < 30:
+                continue
+
+            prices.append(float(adv["price"]))
+
+        if len(prices) < 3:
+            return None
+
+        # 🔥 ТОП-3 как в приложении
+        prices.sort(reverse=True)
+        top3 = prices[:3]
+
+        return round(sum(top3) / 3, 3)
 
     except Exception as e:
         print("BINANCE ERROR:", e)
@@ -103,9 +117,9 @@ while True:
                 last_signal = False
 
         else:
-            print("Нет данных Binance")
+            print("Нет норм офферов")
 
-        # ⏱ пинг
+        # ⏱ жив
         if time.time() - last_ping > 10800:
             send_telegram("✅ Бот жив")
             last_ping = time.time()
