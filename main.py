@@ -5,8 +5,8 @@ import time
 BOT_TOKEN = "8691332194:AAEFEy49VmViDx9PQ3mTPYPF4hTZLGX3CI0"
 CHAT_ID = "8039241406"
 
-BASE_PRICE = 0.855
-TRIGGER_PERCENT = 0.6
+BASE_PRICE = 0.855  # фикс покупка
+TRIGGER_PERCENT = 0.6  # сигнал от %
 
 last_signal = False
 last_ping = 0
@@ -24,7 +24,7 @@ def send_telegram(text):
 
 
 # =========================
-# 📊 BINANCE SELL (ФИКС)
+# 📊 BINANCE SELL (БЕЗ ОБЪЕМА)
 # =========================
 def get_binance_sell():
     url = "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
@@ -33,7 +33,6 @@ def get_binance_sell():
         "asset": "USDT",
         "fiat": "EUR",
         "tradeType": "SELL",
-        "transAmount": str(AMOUNT),
         "page": 1,
         "rows": 10,
         "payTypes": [
@@ -56,13 +55,9 @@ def get_binance_sell():
             adv = item["adv"]
             advertiser = item["advertiser"]
 
-            min_limit = float(adv["minSingleTransAmount"])
-            max_limit = float(adv["maxSingleTransAmount"])
             orders = float(advertiser["monthOrderCount"])
 
-            # 🔥 фильтры
-         
-
+            # 🔥 анти-мусор
             if orders < 30:
                 continue
 
@@ -117,7 +112,7 @@ while True:
         else:
             print("Нет норм офферов")
 
-        # ⏱ жив
+        # ⏱ пинг раз в 3 часа
         if time.time() - last_ping > 10800:
             send_telegram("✅ Бот жив")
             last_ping = time.time()
