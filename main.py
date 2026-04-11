@@ -6,7 +6,6 @@ BOT_TOKEN = "8691332194:AAEFEy49VmViDx9PQ3mTPYPF4hTZLGX3CI0"
 CHAT_ID = "8039241406"
 
 BASE_PRICE = 0.855
-AMOUNT = 250
 TRIGGER_PERCENT = 0.6
 
 last_signal = False
@@ -62,8 +61,7 @@ def get_binance_sell():
             orders = float(advertiser["monthOrderCount"])
 
             # 🔥 фильтры
-            if not (min_limit <= AMOUNT <= max_limit):
-                continue
+         
 
             if orders < 30:
                 continue
