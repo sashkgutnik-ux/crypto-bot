@@ -2,13 +2,13 @@ import requests
 import time
 
 # 🔐 ВСТАВЬ СВОЁ
-BOT_TOKEN = "ТВОЙ_ТОКЕН"
-CHAT_ID = "ТВОЙ_CHAT_ID"
+BOT_TOKEN = "8691332194:AAEFEy49VmViDx9PQ3mTPYPF4hTZLGX3CI0"
+CHAT_ID = "8039241406"
 
-BASE_PRICE = 0.864  # 🔥 фикс байбит
+BASE_PRICE = 0.855  # 🔥 фикс покупка
 AMOUNT = 250
 
-TRIGGER_PERCENT = 0.6  # сигнал от 0.6%
+TRIGGER_PERCENT = 0.6
 
 last_signal = False
 last_ping = 0
@@ -26,7 +26,7 @@ def send_telegram(text):
 
 
 # =========================
-# 📊 BINANCE SELL
+# 📊 BINANCE SELL (ТОЛЬКО НУЖНЫЕ ПЛАТЕЖКИ)
 # =========================
 def get_binance_sell():
     url = "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
@@ -38,7 +38,14 @@ def get_binance_sell():
         "transAmount": str(AMOUNT),
         "page": 1,
         "rows": 10,
-        "payTypes": ["REVOLUT", "N26", "WISE", "SEPA_INSTANT"]
+        "payTypes": [
+            "WISE",
+            "N26",
+            "SEPA_INSTANT",
+            "PAYSAFE",   # иногда это Paysera
+            "SEPA",      # обычный банковский перевод ЕС
+            "BUNQ"
+        ]
     }
 
     try:
@@ -58,45 +65,9 @@ def get_binance_sell():
 
         return round(max(prices), 3) if prices else None
 
-    except:
+    except Exception as e:
+        print("BINANCE ERROR:", e)
         return None
-
-
-# =========================
-# 📊 BYBIT SELL
-# =========================
-def get_bybit_sell():
-    url = "https://api2.bybit.com/fiat/otc/item/online"
-
-    payload = {
-        "tokenId": "USDT",
-        "currencyId": "EUR",
-        "side": "0",  # 🔥 SELL
-        "size": "10",
-        "page": "1",
-        "payment": ["14", "62", "75"]  # Revolut, N26, Wise
-    }
-
-    for _ in range(3):
-        try:
-            r = requests.post(url, json=payload, timeout=15)
-            data = r.json()
-
-            prices = []
-
-            for item in data["result"]["items"]:
-                min_limit = float(item["minAmount"])
-                max_limit = float(item["maxAmount"])
-
-                if min_limit <= AMOUNT <= max_limit:
-                    prices.append(float(item["price"]))
-
-            return round(max(prices), 3) if prices else None
-
-        except:
-            time.sleep(2)
-
-    return None
 
 
 # =========================
@@ -107,51 +78,34 @@ print("🚀 BOT STARTED")
 while True:
     try:
         binance = get_binance_sell()
-        bybit = get_bybit_sell()
 
-        print("BASE:", BASE_PRICE)
+        print("BASE BUY:", BASE_PRICE)
         print("BINANCE SELL:", binance)
-        print("BYBIT SELL:", bybit)
 
-        signal_triggered = False
-
-        # ===== BINANCE =====
         if binance:
-            delta_binance = binance - BASE_PRICE
-            percent_binance = (delta_binance / BASE_PRICE) * 100
+            delta = binance - BASE_PRICE
+            percent = (delta / BASE_PRICE) * 100
 
-            print(f"BINANCE Δ: {round(delta_binance,4)}")
-            print(f"BINANCE %: {round(percent_binance,2)}%")
+            print(f"DELTA: {round(delta,4)}")
+            print(f"PERCENT: {round(percent,2)}%")
 
-            if percent_binance >= TRIGGER_PERCENT:
-                signal_triggered = True
+            if percent >= TRIGGER_PERCENT:
+                if not last_signal:
+                    send_telegram(
+                        f"🚀 СИГНАЛ\n\n"
+                        f"Купить: {BASE_PRICE}\n"
+                        f"Продать Binance: {binance}\n\n"
+                        f"Δ: {round(delta,4)}\n"
+                        f"{round(percent,2)}%"
+                    )
+                    last_signal = True
+            else:
+                last_signal = False
 
-        # ===== BYBIT =====
-        if bybit:
-            delta_bybit = bybit - BASE_PRICE
-            percent_bybit = (delta_bybit / BASE_PRICE) * 100
-
-            print(f"BYBIT Δ: {round(delta_bybit,4)}")
-            print(f"BYBIT %: {round(percent_bybit,2)}%")
-
-            if percent_bybit >= TRIGGER_PERCENT:
-                signal_triggered = True
-
-        # ===== СИГНАЛ =====
-        if signal_triggered:
-            if not last_signal:
-                send_telegram(
-                    f"🚀 ПЕРЕКОС\n\n"
-                    f"BASE: {BASE_PRICE}\n\n"
-                    f"BINANCE SELL: {binance}\n"
-                    f"BYBIT SELL: {bybit}\n\n"
-                    f"Проверь руками 🔥"
-                )
-                last_signal = True
         else:
-            last_signal = False
+            print("Нет данных Binance")
 
-        # ===== ПИНГ =====
+        # ⏱ пинг
         if time.time() - last_ping > 10800:
             send_telegram("✅ Бот жив")
             last_ping = time.time()
