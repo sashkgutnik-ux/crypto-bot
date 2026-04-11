@@ -34,7 +34,7 @@ def get_binance_sell():
         "fiat": "EUR",
         "tradeType": "SELL",
         "page": 1,
-        "rows": 10,
+        "rows": 15,
         "payTypes": [
             "WISE",
             "N26",
@@ -49,32 +49,27 @@ def get_binance_sell():
         r = requests.post(url, json=payload, timeout=10)
         data = r.json()
 
-        prices = []
-
         for item in data["data"]:
             adv = item["adv"]
             advertiser = item["advertiser"]
 
             orders = float(advertiser["monthOrderCount"])
 
-            # 🔥 анти-мусор
+            # 🔥 фильтр мусора
             if orders < 30:
                 continue
 
-            prices.append(float(adv["price"]))
+            price = float(adv["price"])
 
-        if len(prices) < 3:
-            return None
+            # 👉 ПЕРВЫЙ НОРМ ОФФЕР = как в приложении
+            return round(price, 3)
 
-        # 🔥 ТОП-3 как в приложении
-        prices.sort(reverse=True)
-        top3 = prices[:3]
-
-        return round(sum(top3) / 3, 3)
+        return None
 
     except Exception as e:
         print("BINANCE ERROR:", e)
         return None
+
 
 
 # =========================
